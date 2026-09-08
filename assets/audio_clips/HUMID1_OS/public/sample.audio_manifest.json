@@ -1,0 +1,43 @@
+{
+  "device": " HUMID_OS_Hygrometer",
+  "version": "1.0",
+  "base_url": "https://humid1.com/audio/",
+  "sounds": {
+    "boot_chime": {
+      "filename": "000_Chime.mp3",
+      "trigger": "system_boot"
+    },
+    "ready_for_pairing": {
+      "filename": "001_Ready_for_pairing.mp3",
+      "trigger": "ble_prov_start"
+    },
+    "configuration_saved": {
+      "filename": "002_Configuration_saved.mp3",
+      "trigger": "ble_prov_cred_recv"
+    },
+    "connecting_to_cloud": {
+      "filename": "003_Connecting_to_cloud.mp3",
+      "trigger": "wifi_connected"
+    },
+    "connected": {
+      "filename": "004_Connected.mp3",
+      "trigger": "thingsboard_mqtt_connected"
+    },
+    "factory_state_restored": {
+      "filename": "005_Factory_state_restored.mp3",
+      "trigger": "nvs_wipe"
+    },
+    "battery_low": {
+      "filename": "006_Battery_low_Please_charge.mp3",
+      "trigger": "adc_voltage_low"
+    },
+    "connection_failed": {
+      "filename": "007_Connection_failed_Retrying.mp3",
+      "trigger": "mqtt_disconnect"
+    },
+    "critical_error": {
+      "filename": "008_Critical_Error_whoops.mp3",
+      "trigger": "system_fault"
+    }
+  }
+}

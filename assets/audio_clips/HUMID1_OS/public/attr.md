@@ -1,0 +1,2 @@
+(000_Chime.mp3) 494260 - Sound Effect by <a href="https://pixabay.com/users/universfield-28281460/?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=494260">Universfield</a> from <a href="https://pixabay.com/sound-effects//?utm_source=link-attribution&utm_medium=referral&utm_campaign=music&utm_content=494260">Pixabay</a>  
+(001-008 .mp3) Generated with the Cloud Text-to-Speech API, Voice Chime3-HD-Kore (US-en)  

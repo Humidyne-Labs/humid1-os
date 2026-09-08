@@ -1,0 +1,8 @@
+Ready for pairing.
+Configuration saved.
+Connecting to cloud.
+Connected.
+Factory state restored.
+Battery low. Please charge.
+Connection failed. Retrying.
+Critical Error, whoops...
