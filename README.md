@@ -4,7 +4,7 @@
   <img src="./assets/banner_0.png" alt="HUMID1-OS Banner" width="100%">
 </p>
 
----
+[![Donate to Humid1](https://custom-icon-badges.demolab.com/badge/Donate-Humid1.com-4A154B?style=plastic&logo=signupgenius&logoColor=white)](https://tools.signupgenius.com/c/support-humid1-project)  
 
 > [!WARNING]
 > **Project Under Construction:** The `HUMID1-OS` repository and its associated cloud and hardware integration are currently under active development. Features, code structures, and documentation are subject to change.
@@ -111,8 +111,15 @@ While initial explorations considered monetizing the product, a thorough cost-be
 
 ---
 
-**Humiditron-2026**  
-Licenses: [MIT](LICENSE) (Code) | [CC BY 4.0](LICENSE-ASSETS) (Media Assets)  
-*Co-architected with a touch of C.A.D. (Companion-Assisted Design)*  
+## 📄 License
 
-[![Donate to Humid1](https://custom-icon-badges.demolab.com/badge/Donate-Humid1.com-4A154B?style=plastic&logo=signupgenius&logoColor=white)](https://tools.signupgenius.com/c/support-humid1-project)
+Licenses: [MIT](LICENSE) (Code) | [CC BY 4.0](LICENSE-ASSETS) (Media Assets)  
+
+## 👥 Contributors
+
+[![none](https://wsrv.nl/?url=github.com/Humiditron.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@Humiditron")](https://github.com/Humiditron/)
+[![none](https://wsrv.nl/?url=github.com/google-gemini.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@google-gemini")](https://github.com/google-gemini/)
+
+© 2026 **Humidyne-Labs**
+
+
