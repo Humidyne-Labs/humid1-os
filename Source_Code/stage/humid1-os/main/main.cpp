@@ -63,19 +63,22 @@ extern "C" void app_main(void)
 
     /* Initialize LVGL v9 GUI port (e-Paper Display + Touch Panel) */
     ESP_LOGI(TAG, "Starting LVGL initialization...");
-    if (bsp_lvgl_init() == ESP_OK) {
+    bool lvgl_ready = (bsp_lvgl_init() == ESP_OK);
+    if (lvgl_ready) {
         xTaskCreate(bsp_lvgl_port_task, "lvgl_task", 4096, NULL, 5, NULL);
     } else {
         ESP_LOGE(TAG, "LVGL initialization failed");
     }
 
-    /* Create sample LVGL UI widget */
-    lv_obj_t *scr = lv_screen_active();
-    lv_obj_t *label = lv_label_create(scr);
-    char label_buf[64];
-    snprintf(label_buf, sizeof(label_buf), "BSP Running!\n%s", dev_name);
-    lv_label_set_text(label, label_buf);
-    lv_obj_center(label);
+    if (lvgl_ready) {
+        /* Create sample LVGL UI widget */
+        lv_obj_t *scr = lv_screen_active();
+        lv_obj_t *label = lv_label_create(scr);
+        char label_buf[64];
+        snprintf(label_buf, sizeof(label_buf), "BSP Running!\n%s", dev_name);
+        lv_label_set_text(label, label_buf);
+        lv_obj_center(label);
+    }
 
     ESP_LOGI(TAG, "Initialization complete. Entering telemetry loop...");
 
