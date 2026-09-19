@@ -1,12 +1,12 @@
 dependencies:
   esp32-s3_bsp:
-    component_hash: 3dbdee7df0dd9e230ec2c6fcb689b2662d8f63a683d08e955ecdf8613edff671
+    component_hash: fb15bcfcf6ef83f22be473c4b3222040fd38fea98243ae964ab53ada831a3462
     dependencies: []
     source:
       git: https://github.com/Humidyne-Labs/esp32-s3_bsp.git
       path: .
       type: git
-    version: 700f180d9ed0de1990a05da27b68cbb0359826c7
+    version: 533f784870ad4089ec2938e1f42df1d2ed6eb70e
   idf:
     source:
       type: idf
