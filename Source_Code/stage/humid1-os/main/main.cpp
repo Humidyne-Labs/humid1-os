@@ -62,8 +62,11 @@ extern "C" void app_main(void)
     }
 
     /* Initialize LVGL v9 GUI port (e-Paper Display + Touch Panel) */
+    ESP_LOGI(TAG, "Starting LVGL initialization...");
     if (bsp_lvgl_init() == ESP_OK) {
         xTaskCreate(bsp_lvgl_port_task, "lvgl_task", 4096, NULL, 5, NULL);
+    } else {
+        ESP_LOGE(TAG, "LVGL initialization failed");
     }
 
     /* Create sample LVGL UI widget */
