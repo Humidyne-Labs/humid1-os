@@ -70,7 +70,7 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "LVGL initialization failed");
     }
 
-    if (lvgl_ready) {
+    //if (lvgl_ready) {
         /* Create sample LVGL UI widget */
         lv_obj_t *scr = lv_screen_active();
         lv_obj_t *label = lv_label_create(scr);
@@ -78,7 +78,7 @@ extern "C" void app_main(void)
         snprintf(label_buf, sizeof(label_buf), "BSP Running!\n%s", dev_name);
         lv_label_set_text(label, label_buf);
         lv_obj_center(label);
-    }
+    //}
 
     ESP_LOGI(TAG, "Initialization complete. Entering telemetry loop...");
 
@@ -93,8 +93,10 @@ extern "C" void app_main(void)
         /* Read SHTC3 Sensor (Kelvin, Celsius & Humidity) */
         bsp_shtc3_data_t sensor_data;
         if (bsp_shtc3_read(&sensor_data) == ESP_OK) {
-            ESP_LOGI(TAG, "Temp: %.2f K, Humidity: %.2f %%",
-                     sensor_data.temperature_k,
+            float temperature_c = sensor_data.temperature_k - 273.15f;
+            float temperature_f = temperature_c * 9.0f / 5.0f + 32.0f;
+            ESP_LOGI(TAG, "Temp: %.2f K (%.2f C / %.2f F), Humidity: %.2f %%",
+                     sensor_data.temperature_k, temperature_c, temperature_f,
                      sensor_data.humidity_percent);
         }
 

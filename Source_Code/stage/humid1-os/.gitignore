@@ -2,6 +2,7 @@
 .DS_Store
 .AppleDouble
 .LSOverride
+.port_bsp_org
 
 # Directory metadata
 .directory
