@@ -7,6 +7,16 @@ dependencies:
       path: .
       type: git
     version: 3db80526a792ca26c746295030b7a1a3192a75f5
+  espressif/esp_codec_dev:
+    component_hash: 4779f31a3ba3f9b38aee1afe6ccb9ba8f6108dc3a6e77d39d7d714e9a215371b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.6.2
   idf:
     source:
       type: idf
@@ -44,8 +54,9 @@ dependencies:
     version: 9.6.0~1
 direct_dependencies:
 - esp32-s3_bsp
+- espressif/esp_codec_dev
 - idf
 - lvgl/lvgl
-manifest_hash: 37ca8f1b8db14a07b8fa35e34f32bf424b0fb32074c3d0b6af1a528fd9e6939b
+manifest_hash: 5da2d657fe8d47df98af56be813f17dc4eccf14bcaba23e5675e0c6a314d5565
 target: esp32s3
 version: 3.0.0

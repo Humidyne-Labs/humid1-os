@@ -17,12 +17,48 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "bsp/bsp.h"
+#include "bsp/bsp_audio.h"
 
 static const char *TAG = "main_app";
+
+static void audio_test_task(void *arg)
+{
+    ESP_LOGI(TAG, "Initializing BSP audio hardware...");
+    ESP_ERROR_CHECK(bsp_audio_init());
+    ESP_ERROR_CHECK(bsp_audio_set_volume(100.0f));
+
+    const uint32_t sample_rate = 16000;
+    const uint32_t tone_hz = 1000;
+    const size_t samples_per_channel = sample_rate / 10; // 100 ms tone
+    static int16_t tone[samples_per_channel * 2]; // stereo interleaved: L,R,L,R,...
+    constexpr float kPi = 3.14159265358979323846f;
+
+    for (size_t i = 0; i < samples_per_channel; ++i) {
+        const float time_s = static_cast<float>(i) / static_cast<float>(sample_rate);
+        const float sample = 0.25f * sinf(2.0f * kPi * static_cast<float>(tone_hz) * time_s);
+        const int16_t value = static_cast<int16_t>(sample * 32767.0f);
+        tone[i * 2 + 0] = value; // left
+        tone[i * 2 + 1] = value; // right
+    }
+
+    size_t bytes_written = 0;
+    ESP_LOGI(TAG, "Playing 100 ms 1 kHz stereo test tone...");
+    esp_err_t ret = bsp_audio_play(tone, sizeof(tone), &bytes_written);
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "Audio test complete: %zu bytes written", bytes_written);
+    } else {
+        ESP_LOGE(TAG, "Audio test failed: %s", esp_err_to_name(ret));
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    bsp_audio_pa_enable(false);
+    vTaskDelete(NULL);
+}
 
 extern "C" void app_main(void)
 {
@@ -64,21 +100,23 @@ extern "C" void app_main(void)
     /* Initialize LVGL v9 GUI port (e-Paper Display + Touch Panel) */
     ESP_LOGI(TAG, "Starting LVGL initialization...");
     bool lvgl_ready = (bsp_lvgl_init() == ESP_OK);
-    if (lvgl_ready) {
-        xTaskCreate(bsp_lvgl_port_task, "lvgl_task", 4096, NULL, 5, NULL);
-    } else {
+    if (!lvgl_ready) {
         ESP_LOGE(TAG, "LVGL initialization failed");
     }
 
-    //if (lvgl_ready) {
-        /* Create sample LVGL UI widget */
-        lv_obj_t *scr = lv_screen_active();
-        lv_obj_t *label = lv_label_create(scr);
-        char label_buf[64];
-        snprintf(label_buf, sizeof(label_buf), "BSP Running!\n%s", dev_name);
-        lv_label_set_text(label, label_buf);
-        lv_obj_center(label);
-    //}
+    /* Create sample LVGL UI widget */
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_t *label = lv_label_create(scr);
+    char label_buf[64];
+    snprintf(label_buf, sizeof(label_buf), "BSP Running!\n%s", dev_name);
+    lv_label_set_text(label, label_buf);
+    lv_obj_center(label);
+
+    if (lvgl_ready) {
+        xTaskCreate(bsp_lvgl_port_task, "lvgl_task", 4096, NULL, 5, NULL);
+    }
+
+    xTaskCreate(audio_test_task, "audio_test_task", 4096, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Initialization complete. Entering telemetry loop...");
 

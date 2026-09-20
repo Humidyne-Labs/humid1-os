@@ -1263,11 +1263,8 @@ CONFIG_I2C_MASTER_ISR_HANDLER_IN_IRAM=y
 #
 # ESP-Driver:I2S Configurations
 #
-# default:
 # CONFIG_I2S_ISR_IRAM_SAFE is not set
-# default:
-# CONFIG_I2S_CTRL_FUNC_IN_IRAM is not set
-# default:
+CONFIG_I2S_CTRL_FUNC_IN_IRAM=y
 # CONFIG_I2S_ENABLE_DEBUG_LOG is not set
 # end of ESP-Driver:I2S Configurations
 
@@ -3872,6 +3869,30 @@ CONFIG_BSP_GPIO_PA_CTRL=46
 CONFIG_BSP_GPIO_PA_EN=42
 # end of Pinout Configuration
 # end of ESP32-S3 Touch ePaper Board Support Package
+
+#
+# Audio Codec Device Configuration
+#
+# default:
+# CONFIG_CODEC_I2C_BACKWARD_COMPATIBLE is not set
+# default:
+CONFIG_CODEC_ES8311_SUPPORT=y
+# CONFIG_CODEC_ES7210_SUPPORT is not set
+# CONFIG_CODEC_ES7243_SUPPORT is not set
+# CONFIG_CODEC_ES7243E_SUPPORT is not set
+# CONFIG_CODEC_ES8156_SUPPORT is not set
+# CONFIG_CODEC_AW88298_SUPPORT is not set
+# CONFIG_CODEC_ES8389_SUPPORT is not set
+# CONFIG_CODEC_ES8374_SUPPORT is not set
+# CONFIG_CODEC_ES8388_SUPPORT is not set
+# CONFIG_CODEC_TAS5805M_SUPPORT is not set
+# default:
+# CONFIG_CODEC_ZL38063_SUPPORT is not set
+# default:
+# CONFIG_CODEC_CJC8910_SUPPORT is not set
+CONFIG_CODEC_DUMMY_SUPPORT=y
+CONFIG_CODEC_DATA_ADC_SUPPORT=y
+# end of Audio Codec Device Configuration
 
 #
 # LVGL
