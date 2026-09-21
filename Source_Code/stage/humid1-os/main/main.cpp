@@ -19,8 +19,6 @@
  * @copyright Copyright (c) 2026 Humidyne Labs / Humiditron
  * SPDX-License-Identifier: MIT
  * 
- * --- To The support Staff at Waveshare ---
- *     Also known as 'The Sticker Guy' (I hope?...)
  */
 
 #include <stdio.h>
