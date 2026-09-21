@@ -19,6 +19,9 @@
  * @copyright Copyright (c) 2026 Humidyne Labs / Humiditron
  * SPDX-License-Identifier: MIT
  * 
+ * Notes: Tested latest pull of bsp, hosted (https://github.com/Humidyne-Labs/esp32-s3_bsp)
+ * - Unused LVGL variables promted warning, sucessfully compiled [9/20/2026].
+ * 
  */
 
 #include <stdio.h>
