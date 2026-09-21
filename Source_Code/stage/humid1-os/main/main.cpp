@@ -18,6 +18,9 @@
  * 
  * @copyright Copyright (c) 2026 Humidyne Labs / Humiditron
  * SPDX-License-Identifier: MIT
+ * 
+ * --- To The support Staff at Waveshare ---
+ *     Also known as 'The Sticker Guy' (I hope?...)
  */
 
 #include <stdio.h>
@@ -31,16 +34,16 @@
 static const char *TAG = "main";
 
 // UI Label Handles
-static lv_obj_t *lbl_title;
-static lv_obj_t *lbl_time;
-static lv_obj_t *lbl_sensors;
-static lv_obj_t *lbl_power;
-static lv_obj_t *lbl_storage;
-static lv_obj_t *lbl_event;
+static lv_obj_t *lbl_title   = NULL;
+static lv_obj_t *lbl_time    = NULL;
+static lv_obj_t *lbl_sensors = NULL;
+static lv_obj_t *lbl_power   = NULL;
+static lv_obj_t *lbl_storage = NULL;
+static lv_obj_t *lbl_event   = NULL;
 
 // Button state tracking for edge detection
 static bool s_boot_prev_state = false;
-static bool s_pwr_prev_state = false;
+static bool s_pwr_prev_state  = false;
 
 /* =========================================================================
  * Audio Chime Synthesizer (880 Hz -> 1760 Hz)
@@ -65,7 +68,6 @@ static void play_audio_chime(void) {
             float angle = 2.0f * (float)M_PI * freqs[t] * ((float)i / (float)sample_rate);
             float env = sinf((float)M_PI * ((float)i / (float)tone_samples));
             int16_t sample = (int16_t)(sinf(angle) * env * 12000.0f);
-			// Speaker is MONO
             *p++ = sample; // Left channel
             *p++ = sample; // Right channel
         }
@@ -88,7 +90,9 @@ static void button_monitor_task(void *pvParameters) {
         if (boot_pressed && !s_boot_prev_state) {
             ESP_LOGI(TAG, "BOOT key pressed -> Playing Audio Chime");
             if (lbl_event) {
+                bsp_lvgl_lock();
                 lv_label_set_text(lbl_event, "Event: BOOT Key (Chime)");
+                bsp_lvgl_unlock();
             }
             play_audio_chime();
         }
@@ -97,7 +101,9 @@ static void button_monitor_task(void *pvParameters) {
         if (pwr_pressed && !s_pwr_prev_state) {
             ESP_LOGI(TAG, "POWER key pressed");
             if (lbl_event) {
+                bsp_lvgl_lock();
                 lv_label_set_text(lbl_event, "Event: POWER Key Pressed");
+                bsp_lvgl_unlock();
             }
         }
 
@@ -109,32 +115,38 @@ static void button_monitor_task(void *pvParameters) {
 }
 
 /* =========================================================================
- * LVGL Periodic Telemetry Callback (Safe Display Refresh Context)
+ * LVGL Periodic Telemetry Callback (Runs in LVGL Task Context)
  * ========================================================================= */
 static void ui_update_timer_cb(lv_timer_t *timer) {
-    // 1. Environmental Sensor (SHTC3)
+    char str_buf[64];
+
+    // 1. Environmental Sensor (SHTC3) - Formatted via standard snprintf
     bsp_shtc3_data_t env;
     if (bsp_shtc3_read(&env) == ESP_OK) {
-        lv_label_set_text_fmt(lbl_sensors, "Temp: %.1f C  |  RH: %.1f %%", 
-                              env.temperature_k - 273.15f, env.humidity_percent);
+        float temp_c = env.temperature_k - 273.15f;
+        snprintf(str_buf, sizeof(str_buf), "Temp: %.1f C  |  RH: %.1f %%", temp_c, env.humidity_percent);
+        lv_label_set_text(lbl_sensors, str_buf);
     }
 
     // 2. Real-Time Clock (PCF85063A)
     bsp_rtc_datetime_t dt;
     if (bsp_rtc_get_datetime(&dt) == ESP_OK) {
-        lv_label_set_text_fmt(lbl_time, "%04d-%02d-%02d  %02d:%02d:%02d",
-                              dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+        snprintf(str_buf, sizeof(str_buf), "%04d-%02d-%02d  %02d:%02d:%02d",
+                 dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second);
+        lv_label_set_text(lbl_time, str_buf);
     }
 
     // 3. Battery Voltage & Percentage
     uint32_t vbat_mv = 0;
     bsp_battery_get_voltage(&vbat_mv, NULL);
     uint8_t pct = bsp_battery_get_percentage();
-    lv_label_set_text_fmt(lbl_power, "Battery: %lu mV (%d%%)", (unsigned long)vbat_mv, pct);
+    snprintf(str_buf, sizeof(str_buf), "Battery: %lu mV (%d%%)", (unsigned long)vbat_mv, pct);
+    lv_label_set_text(lbl_power, str_buf);
 
     // 4. MicroSD Storage Status
     if (bsp_sdcard_is_mounted()) {
-        lv_label_set_text_fmt(lbl_storage, "SD Card: Mounted (%.1f GB)", bsp_sdcard_get_capacity_gb());
+        snprintf(str_buf, sizeof(str_buf), "SD Card: Mounted (%.1f GB)", bsp_sdcard_get_capacity_gb());
+        lv_label_set_text(lbl_storage, str_buf);
     } else {
         lv_label_set_text(lbl_storage, "SD Card: Not Detected");
     }
@@ -147,7 +159,9 @@ static void ui_update_timer_cb(lv_timer_t *timer) {
  * Non-Touch UI Layout (200x200 e-Paper Optimized)
  * ========================================================================= */
 static void create_non_touch_ui(uint32_t boot_count) {
+    char str_buf[64];
     lv_obj_t *scr = lv_screen_active();
+
     lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
 
@@ -156,7 +170,8 @@ static void create_non_touch_ui(uint32_t boot_count) {
     bsp_get_device_name(dev_name, sizeof(dev_name));
 
     lbl_title = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_title, "%s (Boot #%lu)", dev_name, (unsigned long)boot_count);
+    snprintf(str_buf, sizeof(str_buf), "%s (Boot #%lu)", dev_name, (unsigned long)boot_count);
+    lv_label_set_text(lbl_title, str_buf);
     lv_obj_align(lbl_title, LV_ALIGN_TOP_MID, 0, 6);
 
     // RTC Clock
@@ -196,7 +211,7 @@ static void create_non_touch_ui(uint32_t boot_count) {
     lv_label_set_text(lbl_footer, "[BOOT: Chime | PWR: Event]");
     lv_obj_align(lbl_footer, LV_ALIGN_BOTTOM_MID, 0, -6);
 
-    // Periodic UI Refresh Timer (every 3s for e-Paper partial refresh)
+    // Periodic UI Refresh Timer (3 seconds)
     lv_timer_create(ui_update_timer_cb, 3000, NULL);
 }
 
@@ -234,11 +249,13 @@ extern "C" void app_main(void) {
         play_audio_chime();
     }
 
-    // 6. Initialize LVGL Port (Display only, touch bypassed)
+    // 6. Initialize LVGL Port
     ESP_ERROR_CHECK(bsp_lvgl_init());
 
-    // 7. Render Non-Touch UI
+    // 7. Render UI (under LVGL lock before tasks start)
+    bsp_lvgl_lock();
     create_non_touch_ui(boot_count);
+    bsp_lvgl_unlock();
 
     // 8. Start Background Tasks
     xTaskCreatePinnedToCore(button_monitor_task, "btn_task",  3 * 1024, NULL, 3, NULL, 1);
