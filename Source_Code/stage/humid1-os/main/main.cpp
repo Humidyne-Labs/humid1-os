@@ -31,6 +31,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "bsp/bsp.h"
+#include "esp_timer.h"
 
 static const char *TAG = "main";
 
@@ -53,7 +54,7 @@ static void play_audio_chime(void) {
     const uint32_t sample_rate = 16000;
     const size_t tone_samples = sample_rate / 4; // 250ms per tone
     const size_t total_samples = tone_samples * 2;
-    const size_t buf_size = total_samples * 2 * sizeof(int16_t); // Stereo 16-bit
+    const size_t buf_size = total_samples * sizeof(int16_t); // Mono 16-bit
 
     int16_t *buf = (int16_t *)malloc(buf_size);
     if (!buf) {
@@ -69,8 +70,7 @@ static void play_audio_chime(void) {
             float angle = 2.0f * (float)M_PI * freqs[t] * ((float)i / (float)sample_rate);
             float env = sinf((float)M_PI * ((float)i / (float)tone_samples));
             int16_t sample = (int16_t)(sinf(angle) * env * 12000.0f);
-            *p++ = sample; // Left channel
-            *p++ = sample; // Right channel
+            *p++ = sample; // 1st channel
         }
     }
 
