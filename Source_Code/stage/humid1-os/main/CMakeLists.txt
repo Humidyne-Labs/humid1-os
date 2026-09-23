@@ -1,2 +1,9 @@
 idf_component_register(SRCS "main.cpp"
-                    INCLUDE_DIRS ".")
+                    INCLUDE_DIRS "."
+                    PRIV_REQUIRES esp_mmap_assets esp_lv_fs)
+
+# Pack assets and specify file extension(s)
+spiffs_create_partition_assets(storage ../spiflash_assets
+    FLASH_IN_PROJECT
+    MMAP_FILE_SUPPORT_FORMAT ".bin"
+)                  

@@ -15,13 +15,17 @@
  *  - Real-Time Clock (PCF85063A) with baseline timestamp
  *  - LVGL periodic timer callback for safe display refresh
  *  - Non-touch optimized UI layout for 200x200 e-Paper display
+ *  - etc....
  * 
  * @copyright Copyright (c) 2026 Humidyne Labs / Humiditron
  * SPDX-License-Identifier: MIT
  * 
- * Notes: Tested latest pull of bsp, hosted (https://github.com/Humidyne-Labs/esp32-s3_bsp)
- * - Unused LVGL variables promted warning, sucessfully compiled [9/20/2026].
- * 
+ * @observations (9/23/2026) When initalizing the RTC, PA_EN and EPD_3V3_EN 
+ *      pins must NOT be uninitialized. Dispite the external pull-ups, 
+ *      the RTC will not respond to I2C commands if these pins are 'floating'.
+ *      The working theory is i2c diode clamping, grounding the i2c lines.
+ *      OR, some sort of backfeeding issue / supply rail capcatiance inrush brownout.
+ *      (initalizing PA_EN and EPD_3V3_EN before initializing the RTC fixed the issue)
  */
 
 #include <stdio.h>
@@ -32,6 +36,9 @@
 #include "lvgl.h"
 #include "bsp/bsp.h"
 #include "esp_timer.h"
+#include "esp_lv_fs.h"
+#include "esp_mmap_assets.h"
+#include "mmap_generate_storage.h"
 
 static const char *TAG = "main";
 
@@ -43,9 +50,38 @@ static lv_obj_t *lbl_power   = NULL;
 static lv_obj_t *lbl_storage = NULL;
 static lv_obj_t *lbl_event   = NULL;
 
-// Button state tracking for edge detection
-static bool s_boot_prev_state = false;
-static bool s_pwr_prev_state  = false;
+static mmap_assets_handle_t s_mmap_handle = NULL;
+static esp_lv_fs_handle_t s_lv_fs_handle = NULL;
+
+esp_err_t init_mmap_assets(void) {
+    // 1. Zero-initialize and configure MMAP assets
+    mmap_assets_config_t asset_cfg = {};
+    asset_cfg.partition_label = "storage";
+    asset_cfg.max_files = MMAP_STORAGE_FILES;
+    asset_cfg.checksum = MMAP_STORAGE_CHECKSUM;
+    asset_cfg.flags.mmap_enable = true;
+
+    esp_err_t ret = mmap_assets_new(&asset_cfg, &s_mmap_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE("MMAP", "Failed to map assets partition (0x%x)", ret);
+        return ret;
+    }
+
+    // 2. Zero-initialize and configure LVGL filesystem driver
+    fs_cfg_t fs_cfg = {};
+    fs_cfg.fs_letter = 'S';
+    fs_cfg.fs_nums = MMAP_STORAGE_FILES;
+    fs_cfg.fs_assets = s_mmap_handle;
+
+    ret = esp_lv_fs_desc_init(&fs_cfg, &s_lv_fs_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE("MMAP", "Failed to register LVGL FS (0x%x)", ret);
+        return ret;
+    }
+
+    ESP_LOGI("MMAP", "Asset storage mounted to LVGL drive 'S:'");
+    return ESP_OK;
+}
 
 /* =========================================================================
  * Audio Chime Synthesizer (880 Hz -> 1760 Hz)
@@ -80,38 +116,74 @@ static void play_audio_chime(void) {
 }
 
 /* =========================================================================
- * Fast Button Scanner (50 ms FreeRTOS Task)
+ * Application Pre-Shutdown Callback
+ * =========================================================================
+ */
+static SemaphoreHandle_t s_shutdown_sem = NULL;
+
+static void shutdown_task(void *arg) {
+    ESP_LOGI("APP", "Executing safe shutdown routine...");
+
+    bsp_lvgl_lock();
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_clean(scr);
+
+    // 1. Force screen background to white
+    lv_obj_set_style_bg_color(scr, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, LV_PART_MAIN);
+
+    // 2. Create and center image
+    lv_obj_t *img = lv_image_create(scr);
+    lv_image_set_src(img, "S:space_cat.bin");
+    lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
+
+    // 3. Mark screen dirty and flush frame buffer to EPD
+    lv_obj_invalidate(scr);
+    lv_refr_now(NULL);
+    bsp_lvgl_unlock();
+
+    ESP_LOGI("APP", "Waiting 3.5s for e-Paper waveform refresh to complete...");
+    vTaskDelay(pdMS_TO_TICKS(3500)); // Must hold power for full EPD refresh
+
+    // Signal app_pre_shutdown that power can now be cut
+    xSemaphoreGive(s_shutdown_sem);
+    vTaskDelete(NULL);
+}
+
+static void app_pre_shutdown(void *user_data) {
+    ESP_LOGI("APP", "Power off triggered -> Running shutdown display sequence...");
+    
+    if (s_shutdown_sem == NULL) {
+        s_shutdown_sem = xSemaphoreCreateBinary();
+    }
+
+    // Spawn shutdown task with 6KB stack
+    xTaskCreate(shutdown_task, "shutdown_task", 6 * 1024, NULL, 5, NULL);
+
+    // Block here to prevent BSP from de-asserting BSP_GPIO_BAT_CTRL prematurely
+    xSemaphoreTake(s_shutdown_sem, portMAX_DELAY);
+    ESP_LOGI("APP", "e-Paper refresh complete. Releasing power latch.");
+}
+
+/* =========================================================================
+ * Fast Button Scanner
  * ========================================================================= */
-static void button_monitor_task(void *pvParameters) {
-    while (1) {
-        bool boot_pressed = bsp_button_is_pressed(BSP_BUTTON_BOOT);
-        bool pwr_pressed  = bsp_button_is_pressed(BSP_BUTTON_POWER);
-
-        // Falling edge: BOOT Pressed
-        if (boot_pressed && !s_boot_prev_state) {
-            ESP_LOGI(TAG, "BOOT key pressed -> Playing Audio Chime");
-            if (lbl_event) {
-                bsp_lvgl_lock();
-                lv_label_set_text(lbl_event, "Event: BOOT Key (Chime)");
-                bsp_lvgl_unlock();
-            }
-            play_audio_chime();
+static void on_boot_button(bsp_button_t btn, bsp_button_event_t evt, void *arg) {
+    if (evt == BSP_BUTTON_EVENT_SINGLE_CLICK) {
+        ESP_LOGI(TAG, "BOOT key pressed");
+        if (lbl_event) {
+            bsp_lvgl_lock();
+            lv_label_set_text(lbl_event, "Event: BOOT Key Pressed");
+            bsp_lvgl_unlock();
         }
-
-        // Falling edge: POWER Pressed
-        if (pwr_pressed && !s_pwr_prev_state) {
-            ESP_LOGI(TAG, "POWER key pressed");
-            if (lbl_event) {
-                bsp_lvgl_lock();
-                lv_label_set_text(lbl_event, "Event: POWER Key Pressed");
-                bsp_lvgl_unlock();
-            }
+    } else if (evt == BSP_BUTTON_EVENT_LONG_PRESS) {
+        ESP_LOGI(TAG, "BOOT key pressed -> Playing Audio Chime");
+        if (lbl_event) {
+            bsp_lvgl_lock();
+            lv_label_set_text(lbl_event, "Event: BOOT Key (Chime)");
+            bsp_lvgl_unlock();
         }
-
-        s_boot_prev_state = boot_pressed;
-        s_pwr_prev_state  = pwr_pressed;
-
-        vTaskDelay(pdMS_TO_TICKS(50));
+        play_audio_chime();
     }
 }
 
@@ -225,25 +297,48 @@ extern "C" void app_main(void) {
     // 1. Core Board Init (Power hold, NVS, I2C, Buttons)
     ESP_ERROR_CHECK(bsp_board_init());
 
+    // 1.b Register custom event hooks
+    bsp_button_register_cb(BSP_BUTTON_BOOT, BSP_BUTTON_EVENT_SINGLE_CLICK, on_boot_button, NULL);
+    bsp_button_register_cb(BSP_BUTTON_BOOT, BSP_BUTTON_EVENT_LONG_PRESS,   on_boot_button, NULL);
+    bsp_power_register_shutdown_cb(app_pre_shutdown, NULL);
+
     // 2. NVS Boot Counter
     uint32_t boot_count = 0;
     bsp_nvs_get_u32("boot_count", &boot_count);
     bsp_nvs_set_u32("boot_count", ++boot_count);
 
     // 3. Initialize RTC & baseline timestamp
-    bsp_rtc_init();
-    bsp_rtc_datetime_t dt;
-    if (bsp_rtc_get_datetime(&dt) != ESP_OK || dt.year < 2024) {
-        bsp_rtc_datetime_t init_dt = {
-            .year = 2026, .month = 9, .day = 20,
-            .weekday = 0, .hour = 19, .minute = 30, .second = 0
-        };
-        bsp_rtc_set_datetime(&init_dt);
+    if(bsp_rtc_init() == ESP_OK) {
+        // If RTC is stopped or not responding yet, retry once after board peripherals are up
+        ESP_LOGI(TAG, "Checking RTC status...");
+        bool is_running = false;
+        if (bsp_rtc_is_running(&is_running) != ESP_OK || !is_running) {
+            ESP_LOGW(TAG, "RTC power-loss or uninitialized. Programming default datetime...");
+            bsp_rtc_datetime_t init_time = {
+                .year = 2026, .month = 9, .day = 23,
+                .weekday = 3, .hour = 12, .minute = 0, .second = 0,
+            };
+            // Ensure write succeeds
+            for (int retry = 0; retry < 3; retry++) {
+                if (bsp_rtc_set_datetime(&init_time) == ESP_OK) {
+                   ESP_LOGI(TAG, "RTC datetime set successfully.");
+                   break;
+                }
+                vTaskDelay(pdMS_TO_TICKS(100));
+            }
+        }
+        ESP_LOGI(TAG, "RTC initialized and running.");
+    } else {
+        ESP_LOGE(TAG, "RTC initialization failed. Continuing without RTC.");
     }
 
-    // 4. Initialize SHTC3 Sensor & Mount MicroSD
-    bsp_shtc3_init();
-    bsp_sdcard_mount();
+    // 4. Initialize SHTC3 Sensor
+    if(bsp_shtc3_init() != ESP_OK) {
+        ESP_LOGE(TAG, "SHTC3 sensor initialization failed. Continuing without sensor.");
+    }
+
+    // 4.b Mount MicroSD Card (if present)
+    bsp_sdcard_mount();     // Mount SD card for LVGL access
 
     // 5. Initialize Audio Codec & Play Boot Sound
     if (bsp_audio_init() == ESP_OK) {
@@ -258,7 +353,8 @@ extern "C" void app_main(void) {
     create_non_touch_ui(boot_count);
     bsp_lvgl_unlock();
 
+    init_mmap_assets(); //ESP_ERROR_CHECK(init_mmap_assets());
+
     // 8. Start Background Tasks
-    xTaskCreatePinnedToCore(button_monitor_task, "btn_task",  3 * 1024, NULL, 3, NULL, 1);
-    xTaskCreatePinnedToCore(bsp_lvgl_port_task,  "lvgl_task", 6 * 1024, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(bsp_lvgl_port_task, "lvgl_task", 6 * 1024, NULL, 2, NULL, 1);
 }
