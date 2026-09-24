@@ -4271,7 +4271,6 @@ CONFIG_LV_USE_GRID=y
 #
 # Image Settings
 #
-# default:
 CONFIG_LV_CACHE_DEF_SIZE=0
 # default:
 CONFIG_LV_IMAGE_HEADER_CACHE_DEF_CNT=0
@@ -4283,7 +4282,6 @@ CONFIG_LV_IMAGE_HEADER_CACHE_DEF_CNT=0
 # CONFIG_LV_BIN_DECODER_RAM_LOAD is not set
 # default:
 # CONFIG_LV_USE_LODEPNG is not set
-# default:
 # CONFIG_LV_USE_LIBPNG is not set
 # default:
 # CONFIG_LV_USE_BMP is not set

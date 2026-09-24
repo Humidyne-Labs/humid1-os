@@ -14,7 +14,7 @@
 #include "esp_mmap_assets.h"
 
 #define MMAP_STORAGE_FILES           1
-#define MMAP_STORAGE_CHECKSUM        0x2091
+#define MMAP_STORAGE_CHECKSUM        0x6B50
 
 enum MMAP_STORAGE_LISTS {
     MMAP_STORAGE_SPACE_CAT_BIN = 0,        /*!< space_cat.bin */

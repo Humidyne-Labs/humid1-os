@@ -33,5 +33,5 @@
   ],
   "idf.currentSetup": "C:\\esp\\v6.1\\esp-idf",
   "idf.flashType": "JTAG",
-  "idf.portWin": "COM3"
+  "idf.port": "COM3"
 }
