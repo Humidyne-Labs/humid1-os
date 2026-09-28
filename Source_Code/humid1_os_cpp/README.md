@@ -7,6 +7,7 @@
 
 The official **`HUMID1-OS`** production user application for the **Waveshare ESP32-S3 Touch-ePaper-1.54" V2** embedded hardware platform. Engineered for ultra-low-power environmental telemetry, dynamic server-driven attribute control, and seamless zero-touch IoT management via ThingsBoard.
 
+[![Donate to Humid1](https://custom-icon-badges.demolab.com/badge/Donate-Humid1.com-4A154B?style=plastic&logo=signupgenius&logoColor=white)](https://tools.signupgenius.com/c/support-humid1-project)  
 ---
 
 ## 1. Hardware Platform Specifications
@@ -153,4 +154,12 @@ All server connection parameters are centrally configured in [`main/app_config.h
 ---
 
 ## 📄 License
-MIT License © 2026 **Humidyne Labs / Humiditron**
+
+Licenses: [MIT](LICENSE)  
+
+## 👥 Contributors
+
+[![none](https://wsrv.nl/?url=github.com/Humiditron.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@Humiditron")](https://github.com/Humiditron/)
+[![none](https://wsrv.nl/?url=github.com/google-gemini.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@google-gemini")](https://github.com/google-gemini/)
+
+© 2026 **Humidyne-Labs**
