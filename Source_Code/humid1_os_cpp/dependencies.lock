@@ -1,6 +1,6 @@
 dependencies:
   esp32_s3_bsp:
-    component_hash: b7d8d596a9c70ac1389fc7cee1977f321ad5cd57f0f25a4437b9600810b23acb
+    component_hash: 711f7ec1843875fea891a8d44c482164ace934d096c56515532c71aa4443f5da
     dependencies:
     - name: idf
       version: '>=5.1'
@@ -22,7 +22,7 @@ dependencies:
       git: https://github.com/Humidyne-Labs/esp32-s3_bsp.git
       path: components/esp32-s3_bsp
       type: git
-    version: 9316122276598cbd09028ba4e6f43cf09293992b
+    version: 85cd386e47feb7c3fea72919e06fbae8ec486b75
   espressif/cjson:
     component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
     dependencies:
@@ -160,6 +160,6 @@ direct_dependencies:
 - espressif/network_provisioning
 - idf
 - lvgl/lvgl
-manifest_hash: 5437b8cef3a4bee81ec606446cc6faf65f214a1bf0c3d4b38818fe51ed978830
+manifest_hash: 7cfaea754118f27ab1934c983d9f8860c3d6bb5eb5e78a30bd318d8e6f3aeccd
 target: esp32s3
 version: 3.0.0

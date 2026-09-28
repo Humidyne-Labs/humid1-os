@@ -96,7 +96,7 @@ While initial explorations considered monetizing the product, a thorough cost-be
 * [x] **Phase 1: Core Infrastructure Setup**
   * Configure and harden the ThingsBoard server environment.
   * Establish domain routing and reverse proxy for `HUMID1-OS`.
-* [ ] **Phase 2: Firmware Development (`HUMID1-OS`)**
+* [x] **Phase 2: Firmware Development (`HUMID1-OS`)**
   * Write and optimize the firmware for the chosen ESP32-S3 e-Paper hardware platform.
   * Implement deep-sleep power saving, `SHTC3` sensor polling, and local e-Paper rendering.
   * Integrate secure Bluetooth provisioning and ThingsBoard telemetry transport.

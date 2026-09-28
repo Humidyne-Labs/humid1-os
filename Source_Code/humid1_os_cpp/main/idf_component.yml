@@ -12,4 +12,4 @@ dependencies:
   esp32_s3_bsp:
     git:                             'https://github.com/Humidyne-Labs/esp32-s3_bsp.git'
     path:                            'components/esp32-s3_bsp'
-    version:                         'v1.3.0'
+    version:                         'v1.4.0'
