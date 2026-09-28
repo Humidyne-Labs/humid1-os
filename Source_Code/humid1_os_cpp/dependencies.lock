@@ -1,0 +1,165 @@
+dependencies:
+  esp32_s3_bsp:
+    component_hash: b7d8d596a9c70ac1389fc7cee1977f321ad5cd57f0f25a4437b9600810b23acb
+    dependencies:
+    - name: idf
+      version: '>=5.1'
+    - name: lvgl/lvgl
+      version: ==9.6.0
+    - name: espressif/esp_codec_dev
+      version: ^1.6.2
+    - name: espressif/esp_mmap_assets
+      version: ^2.0.1
+    - name: espressif/esp_lv_fs
+      version: ^1.0.1
+    - name: espressif/mqtt
+      version: ^1.0.0
+    - name: espressif/network_provisioning
+      version: ^1.2.5
+    - name: espressif/cjson
+      version: ^1.7.19
+    source:
+      git: https://github.com/Humidyne-Labs/esp32-s3_bsp.git
+      path: components/esp32-s3_bsp
+      type: git
+    version: 9316122276598cbd09028ba4e6f43cf09293992b
+  espressif/cjson:
+    component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.7.19~2
+  espressif/cmake_utilities:
+    component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1'
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 0.5.3
+  espressif/esp_codec_dev:
+    component_hash: 4779f31a3ba3f9b38aee1afe6ccb9ba8f6108dc3a6e77d39d7d714e9a215371b
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.6.2
+  espressif/esp_lv_fs:
+    component_hash: 66896007884b817df34c964f9a114fff538ee2674e99fee7159162498b93f94b
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: espressif/esp_mmap_assets
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=1.2'
+    - name: idf
+      require: private
+      version: '>=4.4'
+    - name: lvgl/lvgl
+      registry_url: https://components.espressif.com
+      require: private
+      version: '>=8,<10'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.1
+  espressif/esp_mmap_assets:
+    component_hash: 42310c362596de2a37248c2937b1754bc29cd0356b9839e2a77cf791e6bcdde1
+    dependencies:
+    - name: espressif/cmake_utilities
+      registry_url: https://components.espressif.com
+      require: private
+      version: 0.*
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.0.1
+  espressif/mqtt:
+    component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.3'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.1.0
+  espressif/network_provisioning:
+    component_hash: 8b2be80f0e2fada0cc3b3c845db72cd096752faa74cdf3b048c3acf0d0dc1d66
+    dependencies:
+    - name: espressif/cjson
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >= 6.0
+      version: ^1.7.19
+    - name: idf
+      require: private
+      version: '>=5.1'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.2.5
+  idf:
+    source:
+      type: idf
+    version: 6.1.0
+  lvgl/lvgl:
+    component_hash: d5e723db3a3feca71e34e333a6598b7624e3822577d374e1d44f0e18374952e1
+    dependencies:
+    - name: espressif/freetype
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_FREETYPE} == True
+      version: ^2.14.3
+    - name: espressif/libjpeg-turbo
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBJPEG_TURBO} == True
+      version: ^3.1.1
+    - name: espressif/libpng
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LIBPNG} == True
+      version: ^1.6.58
+    - name: espressif/lz4
+      registry_url: https://components.espressif.com
+      require: private
+      rules:
+      - if: idf_version >=5.5 && $CONFIG{LV_USE_LZ4} == True && $CONFIG{LV_USE_LZ4_INTERNAL} == False
+      version: ^1.10.0
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 9.6.0
+direct_dependencies:
+- esp32_s3_bsp
+- espressif/cjson
+- espressif/esp_codec_dev
+- espressif/esp_lv_fs
+- espressif/esp_mmap_assets
+- espressif/mqtt
+- espressif/network_provisioning
+- idf
+- lvgl/lvgl
+manifest_hash: 5437b8cef3a4bee81ec606446cc6faf65f214a1bf0c3d4b38818fe51ed978830
+target: esp32s3
+version: 3.0.0
