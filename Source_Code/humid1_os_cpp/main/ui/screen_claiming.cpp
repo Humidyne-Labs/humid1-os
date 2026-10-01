@@ -35,19 +35,21 @@ void ui_show_claiming_screen(const char *device_name, const char *claim_token, u
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    // 1. Top Header Bar (0 to 24px)
+    // 1. Top Header Bar (White bg, 1px bottom border, black text)
     lv_obj_t *header = lv_obj_create(scr);
     lv_obj_set_size(header, 200, 22);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(header, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(header, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(header, 0, 0);
+    lv_obj_set_style_border_color(header, lv_color_black(), 0);
+    lv_obj_set_style_border_width(header, 1, 0);
+    lv_obj_set_style_border_side(header, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_radius(header, 0, 0);
     lv_obj_set_style_pad_all(header, 2, 0);
 
     lv_obj_t *lbl_title = lv_label_create(header);
     lv_label_set_text_fmt(lbl_title, "CLAIMING | %s", device_name ? device_name : "HUMID1");
-    lv_obj_set_style_text_color(lbl_title, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_title, lv_color_black(), 0);
     lv_obj_align(lbl_title, LV_ALIGN_CENTER, 0, 0);
 
     // 2. Claiming Card Box (28 to 140px)

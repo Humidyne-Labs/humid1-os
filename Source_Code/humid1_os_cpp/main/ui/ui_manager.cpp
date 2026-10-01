@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "lvgl.h"
 #include "bsp/bsp.h"
+#include "mmap_generate_storage.h"
 
 
 static const char *TAG = "ui_manager";
@@ -31,7 +32,7 @@ void ui_show_shutdown_screen(void)
     ESP_LOGI(TAG, "Rendering Space Cat Shutdown Screen (Persistent EPD)...");
 
     // Mount MMAP flash asset drive 'S:'
-    bsp_assets_init("storage", 'S', 5, 0);
+    bsp_assets_init("storage", 'S', MMAP_STORAGE_FILES, MMAP_STORAGE_CHECKSUM);
 
     // Use full OTP waveform refresh mode so the image persists sharply in zero-power state
     bsp_lvgl_set_first_flush_mode(true);
@@ -45,7 +46,7 @@ void ui_show_shutdown_screen(void)
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
     lv_obj_t *img = lv_image_create(scr);
-    lv_image_set_src(img, "S:space_cat.png");
+    lv_image_set_src(img, "S:space_cat.bin");
     lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
 
     // Force LVGL to render immediately and flush to display
@@ -54,7 +55,7 @@ void ui_show_shutdown_screen(void)
     bsp_lvgl_unlock();
 
     // Wait for e-Paper panel to complete full hardware refresh before power rail drops
-    bsp_display_wait_busy(10000);
+    bsp_delay_ms(3000);
 }
 
 void ui_show_message(const char *title, const char *subtitle)

@@ -28,7 +28,7 @@ esp_err_t sensor_reader_sample(app_telemetry_data_t *out_data)
     memset(out_data, 0, sizeof(app_telemetry_data_t));
 
     // 1. Read SHTC3 Sensor
-    bsp_shtc3_data_t raw_shtc3;
+    bsp_shtc3_data_t raw_shtc3 = {};
     esp_err_t ret = bsp_shtc3_read(&raw_shtc3);
     if (ret == ESP_OK && raw_shtc3.valid) {
         out_data->temp_k = raw_shtc3.temperature_k;
@@ -42,8 +42,8 @@ esp_err_t sensor_reader_sample(app_telemetry_data_t *out_data)
     }
 
     // Convert Kelvin to Celsius and Fahrenheit
-    out_data->temp_c = out_data->temp_k - 273.15f;
-    out_data->temp_f = (out_data->temp_c * 1.8f) + 32.0f;
+    out_data->temp_c = raw_shtc3.temperature_c; // copy new temp C
+    out_data->temp_f = raw_shtc3.temperature_f; // copy new temp F
 
     // 2. Sample Battery Voltage & State of Charge
     uint32_t mv = 0;

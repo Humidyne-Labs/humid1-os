@@ -45,6 +45,64 @@ static void on_prov_success(void *user_data);
 static void on_claim_complete(bool success, void *user_data);
 static void run_telemetry_cycle(void);
 
+static lv_obj_t *bsp_ui_create_inverted_label(lv_obj_t *parent, const char *text, int32_t width, int32_t radius)
+{
+    lv_obj_t *label = lv_label_create(parent);
+    if (!label) return NULL;
+
+    // Set inverted colors & opacity
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+    lv_obj_set_style_bg_color(label, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
+
+    // Padding around text to form the black bounding box
+    lv_obj_set_style_pad_left(label, 8, 0);
+    lv_obj_set_style_pad_right(label, 8, 0);
+    lv_obj_set_style_pad_top(label, 4, 0);
+    lv_obj_set_style_pad_bottom(label, 4, 0);
+
+    // Corner radius (0 = sharp box like image, >0 = rounded pill)
+    lv_obj_set_style_radius(label, radius, 0);
+
+    if (width > 0) {
+        lv_obj_set_width(label, width);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+    } else {
+        lv_obj_set_width(label, LV_SIZE_CONTENT);
+    }
+
+    if (text) {
+        lv_label_set_text(label, text);
+    }
+
+    return label;
+}
+
+static void test_ui_render_text_inversion_demo(void)
+{
+    bsp_lvgl_lock();
+    lv_obj_t *scr = lv_screen_active();
+    lv_obj_clean(scr);
+    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+    // 1. Inverted Wide Sharp Box (Negative Adverbial banner)
+    lv_obj_t *banner = bsp_ui_create_inverted_label(
+        scr,
+        "Negative Adverbial or Only/No Expression + Auxiliary + Subject",
+        185, // Width in pixels
+        0    // Sharp corners (0px radius)
+    );
+    if (banner) lv_obj_align(banner, LV_ALIGN_TOP_MID, 0, 40);
+    // 2. Rounded Pill Badge ("INVERSIONS" tag)
+    lv_obj_t *badge = bsp_ui_create_inverted_label(
+        scr, "INVERSIONS", LV_SIZE_CONTENT, 10
+    );
+    if (badge) lv_obj_align(badge, LV_ALIGN_TOP_MID, 0, 120);
+
+    lv_refr_now(NULL);
+    bsp_lvgl_unlock();
+}
+
 static void on_factory_reset(void *user_data)
 {
     ESP_LOGW(TAG, "Factory Reset Triggered -> Cleared NVS & Rebooting");
@@ -95,7 +153,7 @@ static void on_claim_complete(bool success, void *user_data)
 
 static bool evaluate_alarms(const app_telemetry_data_t *telem, const app_alarm_thresholds_t *th)
 {
-    if (!telem || !th) return false;
+    if (!telem || !th || !telem->valid) return false;
 
     // Relative Humidity limits
     if (telem->rh_pct < th->rh_low_critical || telem->rh_pct > th->rh_high_critical) {
@@ -120,6 +178,12 @@ static void check_and_sync_sntp_periodic(void)
 
     time_t now = 0;
     time(&now);
+
+    // Sync POSIX system time from PCF85063A hardware RTC if system time is uninitialized
+    if (now < 1700000000) {
+        bsp_time_sync_rtc_to_system();
+        time(&now);
+    }
 
     bool need_sntp = false;
     if (rtc_state.last_sntp_sync_ts == 0) {
@@ -241,6 +305,11 @@ static void app_on_cold_boot(void *user_data)
     // Initialize application state
     app_state_init();
     app_state_t *st = app_state_get();
+
+    // Test Function
+    test_ui_render_text_inversion_demo();
+    bsp_delay_ms(5000); //5s delay to view test screen before continuing
+
 
     // Apply audio volume setting
     if (!st->sound_enabled) {

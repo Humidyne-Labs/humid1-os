@@ -133,9 +133,6 @@ static void on_tb_attr_cb(const char *json_payload, void *user_data)
         ESP_LOGI(TAG, "Initial server dataset pushed! Device successfully claimed.");
         s_claim_active = false;
         app_state_set_claimed(true);
-        if (s_claim_cb) {
-            s_claim_cb(true, s_claim_user_data);
-        }
     }
 }
 
@@ -234,7 +231,12 @@ static void claim_monitor_task(void *pvParameters)
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 
-    if (s_claim_active) {
+    if (!s_claim_active && app_state_is_claimed()) {
+        ESP_LOGI(TAG, "Claiming monitor task: Device claimed successfully!");
+        if (s_claim_cb) {
+            s_claim_cb(true, s_claim_user_data);
+        }
+    } else if (s_claim_active) {
         ESP_LOGW(TAG, "Claiming window expired!");
         s_claim_active = false;
         ui_show_message("CLAIM EXPIRED", "Please Restart to Retry");
@@ -249,6 +251,11 @@ static void claim_monitor_task(void *pvParameters)
 
 esp_err_t tb_client_start_claiming(uint32_t duration_ms, app_claim_complete_cb_t cb, void *user_data)
 {
+    if (s_claim_task != NULL) {
+        s_claim_active = false;
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
     s_claim_cb        = cb;
     s_claim_user_data = user_data;
     s_claim_active    = true;

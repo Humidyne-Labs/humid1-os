@@ -1,6 +1,6 @@
 dependencies:
   esp32_s3_bsp:
-    component_hash: 711f7ec1843875fea891a8d44c482164ace934d096c56515532c71aa4443f5da
+    component_hash: 0a705543d7e264f643d15bd9da54b98644d4f6d3266c8e683aff903b66a3e0f4
     dependencies:
     - name: idf
       version: '>=5.1'
@@ -22,7 +22,7 @@ dependencies:
       git: https://github.com/Humidyne-Labs/esp32-s3_bsp.git
       path: components/esp32-s3_bsp
       type: git
-    version: 85cd386e47feb7c3fea72919e06fbae8ec486b75
+    version: 6c2c0a1463df7babb99eb4a700cd34ca636eb4fb
   espressif/cjson:
     component_hash: e788323270d90738662d66fffa910bfe1fba019bba087f01557e70c40485b469
     dependencies:
@@ -89,6 +89,13 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 2.0.1
+  espressif/json_generator:
+    component_hash: cb64dd82a15f935e3647f7b2e21d28f18f47fff7e7c58767b17f7fda236012f0
+    dependencies: []
+    source:
+      registry_url: https://components.espressif.com
+      type: service
+    version: 1.3.0
   espressif/mqtt:
     component_hash: fb18bc3b65aa8c94693a9811ffc322cca8a65d92d5ec84983d3e385080e3969c
     dependencies:
@@ -100,21 +107,19 @@ dependencies:
       type: service
     version: 1.1.0
   espressif/network_provisioning:
-    component_hash: 8b2be80f0e2fada0cc3b3c845db72cd096752faa74cdf3b048c3acf0d0dc1d66
+    component_hash: e110d6f1e0adc2c8cc5b45265e3e6dc561f47f7ab1da6d7a755aefd7147cfe16
     dependencies:
-    - name: espressif/cjson
+    - name: espressif/json_generator
       registry_url: https://components.espressif.com
       require: private
-      rules:
-      - if: idf_version >= 6.0
-      version: ^1.7.19
+      version: ^1.3.0
     - name: idf
       require: private
       version: '>=5.1'
     source:
       registry_url: https://components.espressif.com/
       type: service
-    version: 1.2.5
+    version: 1.3.0
   idf:
     source:
       type: idf
@@ -160,6 +165,6 @@ direct_dependencies:
 - espressif/network_provisioning
 - idf
 - lvgl/lvgl
-manifest_hash: 7cfaea754118f27ab1934c983d9f8860c3d6bb5eb5e78a30bd318d8e6f3aeccd
+manifest_hash: 8fa7b0bf35651d5c8aae02ee84296b099f19db127d7bb0222d8a15118919c1d5
 target: esp32s3
 version: 3.0.0

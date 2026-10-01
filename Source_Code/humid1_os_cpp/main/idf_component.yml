@@ -9,7 +9,10 @@ dependencies:
   espressif/mqtt:                    '^1.0.0'
   espressif/network_provisioning:    '^1.2.5'
   espressif/cjson:                   '^1.7.19'
+
+  ## Custom BSP Layer for Waveshares ESP32-S3-ePaper-1.54 
+  ## (SKU: 32298, [battery & no touch ctrl])
   esp32_s3_bsp:
     git:                             'https://github.com/Humidyne-Labs/esp32-s3_bsp.git'
     path:                            'components/esp32-s3_bsp'
-    version:                         'v1.4.0'
+    version:                         'v1.10.0' # lvgl fix for I1, and QR

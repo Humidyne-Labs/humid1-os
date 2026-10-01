@@ -37,13 +37,15 @@ void ui_show_dashboard_screen(const app_telemetry_data_t *telemetry, app_temp_un
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
 
-    // 1. Top Header Bar (0 to 22px)
+    // 1. Top Header Bar (White bg, 1px bottom border, black text)
     lv_obj_t *header = lv_obj_create(scr);
     lv_obj_set_size(header, 200, 22);
     lv_obj_align(header, LV_ALIGN_TOP_MID, 0, 0);
-    lv_obj_set_style_bg_color(header, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(header, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(header, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_width(header, 0, 0);
+    lv_obj_set_style_border_color(header, lv_color_black(), 0);
+    lv_obj_set_style_border_width(header, 1, 0);
+    lv_obj_set_style_border_side(header, LV_BORDER_SIDE_BOTTOM, 0);
     lv_obj_set_style_radius(header, 0, 0);
     lv_obj_set_style_pad_all(header, 2, 0);
 
@@ -54,13 +56,13 @@ void ui_show_dashboard_screen(const app_telemetry_data_t *telemetry, app_temp_un
     }
     lv_obj_t *lbl_time = lv_label_create(header);
     lv_label_set_text(lbl_time, time_str);
-    lv_obj_set_style_text_color(lbl_time, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_time, lv_color_black(), 0);
     lv_obj_align(lbl_time, LV_ALIGN_LEFT_MID, 4, 0);
 
     // Right: Battery & RSSI
     lv_obj_t *lbl_bat = lv_label_create(header);
     lv_label_set_text_fmt(lbl_bat, "%u%% | %ddBm", telemetry->battery_pct, telemetry->rssi_dbm);
-    lv_obj_set_style_text_color(lbl_bat, lv_color_white(), 0);
+    lv_obj_set_style_text_color(lbl_bat, lv_color_black(), 0);
     lv_obj_align(lbl_bat, LV_ALIGN_RIGHT_MID, -4, 0);
 
     // 2. Main Environmental Card (26 to 162px)
@@ -68,33 +70,52 @@ void ui_show_dashboard_screen(const app_telemetry_data_t *telemetry, app_temp_un
     lv_obj_set_size(card, 192, 136);
     lv_obj_align(card, LV_ALIGN_TOP_MID, 0, 26);
     lv_obj_set_style_radius(card, 6, 0);
-    lv_obj_set_style_pad_all(card, 4, 0);
-
-    lv_color_t card_bg   = alarm_active ? lv_color_black() : lv_color_white();
-    lv_color_t card_text = alarm_active ? lv_color_white() : lv_color_black();
-
-    lv_obj_set_style_bg_color(card, card_bg, 0);
+    lv_obj_set_style_pad_all(card, 0, 0);
+    lv_obj_set_style_bg_color(card, lv_color_white(), 0);
     lv_obj_set_style_bg_opa(card, LV_OPA_COVER, 0);
     lv_obj_set_style_border_color(card, lv_color_black(), 0);
-    lv_obj_set_style_border_width(card, 2, 0);
+    lv_obj_set_style_border_width(card, alarm_active ? 3 : 2, 0);
+
+    // Alert Banner Bar at top of card when alarm is active
+    if (alarm_active) {
+        lv_obj_t *banner = lv_obj_create(card);
+        lv_obj_set_size(banner, 188, 22);
+        lv_obj_align(banner, LV_ALIGN_TOP_MID, 0, 0);
+        lv_obj_set_style_bg_color(banner, lv_color_black(), 0);
+        lv_obj_set_style_bg_opa(banner, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(banner, 0, 0);
+        lv_obj_set_style_radius(banner, 0, 0);
+        lv_obj_set_style_pad_all(banner, 2, 0);
+
+        lv_obj_t *lbl_alert = lv_label_create(banner);
+        lv_label_set_text(lbl_alert, "! THRESHOLD ALERT !");
+        lv_obj_set_style_text_color(lbl_alert, lv_color_white(), 0);
+        lv_obj_align(lbl_alert, LV_ALIGN_CENTER, 0, 0);
+    }
+
+    int rh_y = alarm_active ? 26 : 6;
+    int rh_title_y = alarm_active ? 50 : 36;
+    int line_y = alarm_active ? 68 : 58;
+    int temp_y = alarm_active ? 74 : 66;
+    int temp_title_y = alarm_active ? 98 : 96;
 
     // Humidity Display
     lv_obj_t *lbl_rh = lv_label_create(card);
     lv_label_set_text_fmt(lbl_rh, "%.1f %%", telemetry->rh_pct);
-    lv_obj_set_style_text_color(lbl_rh, card_text, 0);
-    lv_obj_align(lbl_rh, LV_ALIGN_TOP_MID, 0, 6);
+    lv_obj_set_style_text_color(lbl_rh, lv_color_black(), 0);
+    lv_obj_align(lbl_rh, LV_ALIGN_TOP_MID, 0, rh_y);
 
     // Humidity Label Subtext
     lv_obj_t *lbl_rh_title = lv_label_create(card);
     lv_label_set_text(lbl_rh_title, "RELATIVE HUMIDITY");
-    lv_obj_set_style_text_color(lbl_rh_title, card_text, 0);
-    lv_obj_align(lbl_rh_title, LV_ALIGN_TOP_MID, 0, 36);
+    lv_obj_set_style_text_color(lbl_rh_title, lv_color_black(), 0);
+    lv_obj_align(lbl_rh_title, LV_ALIGN_TOP_MID, 0, rh_title_y);
 
     // Horizontal Separator Line
     lv_obj_t *line = lv_obj_create(card);
     lv_obj_set_size(line, 160, 2);
-    lv_obj_align(line, LV_ALIGN_TOP_MID, 0, 58);
-    lv_obj_set_style_bg_color(line, card_text, 0);
+    lv_obj_align(line, LV_ALIGN_TOP_MID, 0, line_y);
+    lv_obj_set_style_bg_color(line, lv_color_black(), 0);
     lv_obj_set_style_border_width(line, 0, 0);
 
     // Temperature Display
@@ -110,14 +131,14 @@ void ui_show_dashboard_screen(const app_telemetry_data_t *telemetry, app_temp_un
 
     lv_obj_t *lbl_temp = lv_label_create(card);
     lv_label_set_text_fmt(lbl_temp, "%.1f %s", temp_val, unit_symbol);
-    lv_obj_set_style_text_color(lbl_temp, card_text, 0);
-    lv_obj_align(lbl_temp, LV_ALIGN_TOP_MID, 0, 66);
+    lv_obj_set_style_text_color(lbl_temp, lv_color_black(), 0);
+    lv_obj_align(lbl_temp, LV_ALIGN_TOP_MID, 0, temp_y);
 
     // Temperature Label Subtext
     lv_obj_t *lbl_temp_title = lv_label_create(card);
-    lv_label_set_text_fmt(lbl_temp_title, "%s", alarm_active ? "! THRESHOLD ALERT !" : "TEMPERATURE");
-    lv_obj_set_style_text_color(lbl_temp_title, card_text, 0);
-    lv_obj_align(lbl_temp_title, LV_ALIGN_TOP_MID, 0, 96);
+    lv_label_set_text(lbl_temp_title, "TEMPERATURE");
+    lv_obj_set_style_text_color(lbl_temp_title, lv_color_black(), 0);
+    lv_obj_align(lbl_temp_title, LV_ALIGN_TOP_MID, 0, temp_title_y);
 
     // 3. Bottom Footer (166 to 200px)
     char date_str[24] = {0};
