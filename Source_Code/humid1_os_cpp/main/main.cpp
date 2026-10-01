@@ -47,36 +47,69 @@ static void run_telemetry_cycle(void);
 
 static lv_obj_t *bsp_ui_create_inverted_label(lv_obj_t *parent, const char *text, int32_t width, int32_t radius)
 {
-    lv_obj_t *label = lv_label_create(parent);
-    if (!label) return NULL;
+    const int32_t MAX_DISP_W = 200;
+    const int32_t MAX_DISP_H = 200;
+    const int32_t pad_h = 10;
+    const int32_t pad_v = 5;
 
-    // Set inverted colors & opacity
-    lv_obj_set_style_text_color(label, lv_color_white(), 0);
-    lv_obj_set_style_bg_color(label, lv_color_black(), 0);
-    lv_obj_set_style_bg_opa(label, LV_OPA_COVER, 0);
+    // 1. Create wrapper container for clean bounding box, padding, & rounded corners
+    lv_obj_t *box = lv_obj_create(parent);
+    if (!box) return NULL;
+    lv_obj_remove_style_all(box); // Clean default border/scrollbar styles
+    lv_obj_set_style_bg_color(box, lv_color_black(), 0);
+    lv_obj_set_style_bg_opa(box, LV_OPA_COVER, 0);
+    lv_obj_set_style_radius(box, radius, 0);
 
-    // Padding around text to form the black bounding box
-    lv_obj_set_style_pad_left(label, 8, 0);
-    lv_obj_set_style_pad_right(label, 8, 0);
-    lv_obj_set_style_pad_top(label, 4, 0);
-    lv_obj_set_style_pad_bottom(label, 4, 0);
+    lv_obj_set_style_pad_left(box, pad_h, 0);
+    lv_obj_set_style_pad_right(box, pad_h, 0);
+    lv_obj_set_style_pad_top(box, pad_v, 0);
+    lv_obj_set_style_pad_bottom(box, pad_v, 0);
 
-    // Corner radius (0 = sharp box like image, >0 = rounded pill)
-    lv_obj_set_style_radius(label, radius, 0);
+    // Flex flow centering ensures child label is centered horizontally and vertically
+    lv_obj_set_flex_flow(box, LV_FLEX_FLOW_ROW);
+    lv_obj_set_flex_align(box, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
 
-    if (width > 0) {
-        lv_obj_set_width(label, width);
-        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
-        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
-    } else {
-        lv_obj_set_width(label, LV_SIZE_CONTENT);
+    // 2. Create child text label
+    lv_obj_t *label = lv_label_create(box);
+    if (!label) {
+        lv_obj_delete(box);
+        return NULL;
     }
+    lv_obj_set_style_text_color(label, lv_color_white(), 0);
+
+    #if defined(LV_FONT_MONTSERRAT_14_BOLD)
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_14_bold, 0);
+    #endif
 
     if (text) {
         lv_label_set_text(label, text);
     }
 
-    return label;
+    if (LV_COORD_IS_PX(width) && width > (pad_h * 2)) {
+        int32_t clamped_w = (width > MAX_DISP_W) ? MAX_DISP_W : width;
+        int32_t content_w = clamped_w - (pad_h * 2);
+        lv_obj_set_width(label, content_w);
+        lv_label_set_long_mode(label, LV_LABEL_LONG_WRAP);
+        lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
+        lv_obj_set_width(box, clamped_w);
+    }
+
+    // Measure exact pixel bounds of the text label
+    lv_obj_update_layout(label);
+    int32_t label_w = lv_obj_get_width(label);
+    int32_t label_h = lv_obj_get_height(label);
+
+    // Hard-clamp container dimensions to 200x200 screen bounds
+    int32_t box_w = (!LV_COORD_IS_PX(width) || width <= 0) ? (label_w + (pad_h * 2)) : lv_obj_get_width(box);
+    if (box_w > MAX_DISP_W) box_w = MAX_DISP_W;
+
+    int32_t box_h = label_h + (pad_v * 2);
+    if (box_h > MAX_DISP_H) box_h = MAX_DISP_H;
+
+    lv_obj_set_width(box, box_w);
+    lv_obj_set_height(box, box_h);
+
+    return box;
 }
 
 static void test_ui_render_text_inversion_demo(void)
@@ -85,6 +118,7 @@ static void test_ui_render_text_inversion_demo(void)
     lv_obj_t *scr = lv_screen_active();
     lv_obj_clean(scr);
     lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
+
     // 1. Inverted Wide Sharp Box (Negative Adverbial banner)
     lv_obj_t *banner = bsp_ui_create_inverted_label(
         scr,
@@ -92,14 +126,15 @@ static void test_ui_render_text_inversion_demo(void)
         185, // Width in pixels
         0    // Sharp corners (0px radius)
     );
-    if (banner) lv_obj_align(banner, LV_ALIGN_TOP_MID, 0, 40);
+    if (banner) lv_obj_align(banner, LV_ALIGN_TOP_MID, 0, 20);
+
     // 2. Rounded Pill Badge ("INVERSIONS" tag)
     lv_obj_t *badge = bsp_ui_create_inverted_label(
         scr, "INVERSIONS", LV_SIZE_CONTENT, 10
     );
-    if (badge) lv_obj_align(badge, LV_ALIGN_TOP_MID, 0, 120);
+    if (badge) lv_obj_align(badge, LV_ALIGN_TOP_MID, 0, 130);
 
-    lv_refr_now(NULL);
+    // DO NOT call lv_refr_now(NULL); here — background LVGL task flushes automatically!
     bsp_lvgl_unlock();
 }
 
