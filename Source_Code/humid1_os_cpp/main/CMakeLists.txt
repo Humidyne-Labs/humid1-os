@@ -11,6 +11,7 @@ idf_component_register(
         "ui/screen_claiming.cpp"
         "ui/screen_dashboard.cpp"
         "ui/screen_ota.cpp"
+        "ui/screen_inversion.cpp"
     INCLUDE_DIRS 
         "."
         "system"

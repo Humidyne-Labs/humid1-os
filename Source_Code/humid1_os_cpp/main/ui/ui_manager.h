@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "lvgl.h"
 #include "telemetry/sensor_reader.h"
 #include "app_state.h"
 
@@ -68,7 +69,83 @@ void ui_show_shutdown_screen(void);
  */
 void ui_show_message(const char *title, const char *subtitle);
 
+/**
+ * @brief Create an Inverted Text Label (Black background container, white text)
+ * 
+ * @param parent Parent LVGL object (or NULL for active screen)
+ * @param text Text to display
+ * @param width Container width in pixels (or LV_SIZE_CONTENT)
+ * @param radius Corner radius in pixels
+ * @return lv_obj_t* Pointer to container object
+ */
+lv_obj_t *ui_create_inverted_label(lv_obj_t *parent, const char *text, int32_t width, int32_t radius);
+
+/**
+ * @brief Create an Inverted Card Container (Black background, rounded corners)
+ * 
+ * @param parent Parent LVGL object (or NULL for active screen)
+ * @param width Card width in pixels
+ * @param height Card height in pixels
+ * @param radius Corner radius in pixels
+ * @return lv_obj_t* Pointer to card container object
+ */
+lv_obj_t *ui_create_inverted_card(lv_obj_t *parent, int32_t width, int32_t height, int32_t radius);
+
+/**
+ * @brief Display Inversion UI Demo Screen (Component-Based Inversion test)
+ */
+void ui_show_inversion_demo_screen(void);
+
+/**
+ * @brief Get shared inverted background style instance (Black BG)
+ */
+lv_style_t *ui_style_get_inverted_bg(void);
+
+/**
+ * @brief Get shared inverted text style instance (White Text)
+ */
+lv_style_t *ui_style_get_inverted_text(void);
+
+/**
+ * @brief Apply standard inverted LVGL style to an object or label
+ */
+void ui_apply_inverted_style(lv_obj_t *obj);
+
+/**
+ * @brief Set full screen background inversion (Black vs White)
+ */
+void ui_set_screen_inverted(lv_obj_t *scr, bool inverted);
+
+/**
+ * @brief Display Inversion UI Demo Screen (Standard LVGL Style/Theme Inversion test)
+ */
+void ui_show_inversion_demo_normal_screen(void);
+
+/**
+ * @brief Attach state-based inversion styles (LV_STATE_DEFAULT = Normal, LV_STATE_CHECKED = Inverted)
+ */
+void ui_apply_state_inversion_styles(lv_obj_t *obj);
+
+/**
+ * @brief Toggle LV_STATE_CHECKED state on an object to flip inversion
+ */
+void ui_toggle_widget_inversion(lv_obj_t *obj);
+
+/**
+ * @brief Direct local style inversion (sets bg_opa=LV_OPA_COVER, bg_color, and text_color)
+ */
+void ui_invert_label_direct(lv_obj_t *obj, bool inverted);
+
+/**
+ * @brief Display Inversion UI Demo Screen (State-Based LV_STATE_CHECKED test)
+ */
+void ui_show_inversion_demo_state_screen(void);
+
 #ifdef __cplusplus
 }
 #endif
+
+
+
+
 

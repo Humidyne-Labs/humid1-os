@@ -1,0 +1,32 @@
+{
+    "name": "Waveshare ESP32-S3 ePaper 1.54 V2 BSP (No Affiliation With Waveshare)",
+    "maintainer": "Humidyne Labs",
+    "hostOperatingSystem": [
+        "Linux",
+        "Windows",
+        "MacOS"
+    ],
+    "environment": [
+        "ESP-IDF"
+    ],
+    "hardware": {
+        "chipVendor": "Espressif",
+        "manufacturer": "Waveshare",
+        "specs": {
+            "MCU": "ESP32-S3 (Dual-Core Xtensa LX7 @ 240 MHz)",
+            "RAM": "512 KB Internal SRAM, 8 MB External Octal PSRAM (80 MHz)",
+            "Flash": "8 MB Quad SPI Flash (80 MHz, QIO Mode)",
+            "Display": "1.54\" 200x200 1-bit Monochrome E-Paper (SSD1681 SPI)",
+            "Audio Codec": "ES8311 I2S Audio Codec + NS4168 Power Amplifier",
+            "Sensors": "SHTC3 Temp/Humidity (I2C) + PCF8563 Real-Time Clock",
+            "Power PMU": "AXP2101 PMU / Battery Voltage Fuel Gauge",
+            "Connectivity": "Wi-Fi 802.11 b/g/n + Bluetooth 5 (LE) NimBLE"
+        }
+    },
+    "description": "Unified Board Support Package for the Waveshare ESP32-S3 ePaper 1.54 V2 platform (ESP32-S3-PICO-1-N8R8). Provides turnkey display drivers, power management, BLE GATT provisioning, sensors, and hardware optimizations.",
+    "shortDescription": "ESP32-S3 ePaper 1.54 V2 Board Support Package for ESP-IDF and LVGL v9.",
+    "urlToClone": "https://github.com/Humidyne-Labs/esp32-s3_bsp.git",
+    "branches": [
+        "main"
+    ]
+}

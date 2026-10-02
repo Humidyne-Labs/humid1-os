@@ -1,0 +1,8 @@
+# Profile: ci (Continuous Integration & Testing)
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# LVGL Logging for CI Diagnosis
+CONFIG_LV_USE_LOG=y
+CONFIG_LV_LOG_LEVEL_INFO=y
+CONFIG_LV_LOG_PRINTF=y

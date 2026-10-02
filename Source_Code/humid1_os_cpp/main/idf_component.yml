@@ -15,4 +15,4 @@ dependencies:
   esp32_s3_bsp:
     git:                             'https://github.com/Humidyne-Labs/esp32-s3_bsp.git'
     path:                            'components/esp32-s3_bsp'
-    version:                         'v1.10.0' # lvgl fix for I1, and QR
+    version:                         'v1.11.0' # newist - API docs

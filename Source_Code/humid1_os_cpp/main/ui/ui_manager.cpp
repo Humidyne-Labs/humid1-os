@@ -50,12 +50,12 @@ void ui_show_shutdown_screen(void)
     lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
 
     // Force LVGL to render immediately and flush to display
-    lv_refr_now(NULL);
+    //lv_refr_now(NULL);
 
     bsp_lvgl_unlock();
 
     // Wait for e-Paper panel to complete full hardware refresh before power rail drops
-    bsp_delay_ms(3000);
+    bsp_delay_ms(10000);
 }
 
 void ui_show_message(const char *title, const char *subtitle)

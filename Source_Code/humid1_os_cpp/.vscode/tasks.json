@@ -1,0 +1,153 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "ESP-IDF: Build (dev Profile)",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_dev build",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "detail": "Builds the project using the 'dev' profile (debug symbols, info logging, stack canary) into build_dev/."
+    },
+    {
+      "label": "ESP-IDF: Build (prod Profile)",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_prod -D PROFILE=prod build",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "detail": "Builds the project using the 'prod' profile (PERF optimization, stripped logs, minimal binary size) into build_prod/."
+    },
+    {
+      "label": "ESP-IDF: Build (ci Profile)",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_ci -D PROFILE=ci build",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "problemMatcher": ["$gcc"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "detail": "Builds the project using the 'ci' profile for automated testing into build_ci/."
+    },
+    {
+      "label": "ESP-IDF: Flash (dev Profile)",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_dev flash",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "detail": "Flashes the 'dev' profile binary onto target hardware."
+    },
+    {
+      "label": "ESP-IDF: Flash (prod Profile)",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_prod flash",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared"
+      },
+      "detail": "Flashes the 'prod' profile release binary onto target hardware."
+    },
+    {
+      "label": "ESP-IDF: Monitor Serial Console",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; idf.py -B build_dev monitor",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated"
+      },
+      "detail": "Opens the serial monitor for the connected target board."
+    },
+    {
+      "label": "ESP-IDF: Clean All Profile Build Directories",
+      "type": "shell",
+      "command": ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'; if (Test-Path build_dev) { Remove-Item -Recurse -Force build_dev }; if (Test-Path build_prod) { Remove-Item -Recurse -Force build_prod }; if (Test-Path build_ci) { Remove-Item -Recurse -Force build_ci }; Get-ChildItem -Filter sdkconfig.* | Where-Object { $_.Name -notlike 'sdkconfig.defaults*' } | Remove-Item -Force",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "shell": {
+          "executable": "powershell.exe",
+          "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      },
+      "detail": "Removes all profile build output directories (build_dev, build_prod, build_ci) and generated sdkconfig files."
+    }
+  ]
+}
