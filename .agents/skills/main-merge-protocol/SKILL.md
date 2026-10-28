@@ -13,7 +13,7 @@ This skill provides step-by-step procedures, one-liner automation commands, and 
 
 | Step | Action | Tools / Files Involved | Verification |
 | :--- | :--- | :--- | :--- |
-| **0a. Identity Audit** | Sanitize & Strip Personal Paths | `python firmware/tools/agent/sanitize.py --check` | Zero leaks in code, archives, or git logs |
+| **0a. Identity Audit** | Sanitize & Strip Personal Paths | `python3 firmware/tools/agent/sanitize.py --check` | Zero leaks in code, archives, or git logs |
 | **0b. Asset Shrink Gate** | Quantize Assets & PDFs | `/shrink` or `firmware/tools/agent/optimize_*.py` | Lossless PDF meta, EXIF stamped |
 | **1. Invariant Check** | Firmware Safety Audit | `.agents/rules/coding.md`, `.agents/skills/h1os-firmware-standards` | 10 Safety Invariants validated |
 | **2. Clean Build** | Compile firmware | `idf.py -C firmware build` via ESP-IDF v6.1 profile | Exit code 0, 0 warnings/errors |
@@ -32,13 +32,13 @@ This skill provides step-by-step procedures, one-liner automation commands, and 
 Run the automated identity and name sanitizer before staging or committing changes:
 
 ```powershell
-python firmware/tools/agent/sanitize.py --check
+python3 firmware/tools/agent/sanitize.py --check
 ```
 
 If un-sanitized author names, personal workstation paths, or archive leaks are reported, apply automatic in-place sanitization:
 
 ```powershell
-python firmware/tools/agent/sanitize.py --fix
+python3 firmware/tools/agent/sanitize.py --fix
 ```
 
 ---

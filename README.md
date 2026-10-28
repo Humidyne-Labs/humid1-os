@@ -1,129 +1,56 @@
-# HUMID1-OS: Application & Custom Cloud Ecosystem
+# Humid1-OS — Precision Humidor Telemetry Instrument Firmware
 
-<p align="center">
-  <img src="./assets/banner_0.jpg" alt="HUMID1-OS Banner" width="100%">
-</p>
-
-[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1-blue.svg)](https://idf.espressif.com/)
-[![H1OS Middleware](https://img.shields.io/badge/H1OS-v2.4.4--dev-brightgreen.svg)](https://github.com/Humidyne-Labs/H1OS)
-[![Hardware](https://img.shields.io/badge/Hardware-Waveshare%20ESP32--S3--ePaper--1.54%20V2-green.svg)](https://www.waveshare.com)
-[![Graphics](https://img.shields.io/badge/LVGL-v9.6.0-orange.svg)](https://lvgl.io/)
-[![Cloud](https://img.shields.io/badge/Cloud-Humid1.com%20Self--Hosted-purple.svg)](https://www.humid1.com/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
-
-[![Donate to Humid1](https://custom-icon-badges.demolab.com/badge/Donate-Humid1.com-4A154B?style=plastic&logo=signupgenius&logoColor=white)](https://tools.signupgenius.com/c/support-humid1-project)  
-
-**`HUMID1-OS`** is an instrument-grade, open-source environmental telemetry and monitoring application engineered for precision cigar and tobacco humidor management.
-
-Built upon **H1OS v2.4.4-dev** as its bare-metal OS and middleware foundation, `HUMID1-OS` delivers deterministic battery longevity, high-contrast 1-bit e-Paper presentation, BLE GATT device onboarding, and seamless telemetry synchronization with **Humid1's self-hosted ThingsBoard instance on our custom cloud ([Humid1.com](https://www.humid1.com/))**.
+* **Target MCU:** ESP32-S3-WROOM-1-N16R8 (16 MB Quad Flash, 8 MB Octal PSRAM)
+* **Operating System Middleware:** [`H1OS` v2.4.4+](https://github.com/voidired/H1OS.git)
+* **Cloud Platform:** ThingsBoard Community Edition (`mqtts://humid1.com:8883`)
+* **Display Engine:** LVGL v9 1-Bit Monochrome ($200 \times 200$ Waveshare 1.54" SSD1681 e-Paper)
+* **Governance Standard:** `APP-STD-001` / `H1OS-STD-001` ("Documentation is Law")
 
 ---
 
-## 1. Architecture & The H1OS Middleware Backbone
+## 1. Overview
 
-`HUMID1-OS` maintains a strict separation between low-level hardware control and high-level application workflows:
+**Humid1-OS** is the Layer 4 embedded application firmware for the **Humid1** battery-powered environmental telemetry instrument. Built on the **H1OS** operating system middleware, it implements:
 
-```mermaid
-graph TD
-    subgraph CustomCloud["Humid1 Custom Cloud Infrastructure (humid1.com)"]
-        TB["Self-Hosted ThingsBoard Community Edition"]
-        OTA_Srv["Self-Hosted OTA Firmware Server"]
-    end
+1. **Encrypted First-Boot BLE Wi-Fi Provisioning (`APP_03`):** Uses `protocomm_ble` Security 1 with a simultaneous on-screen QR code, 8-digit hardware TRNG Proof-of-Possession PIN, and deterministic `HUMID1_<MAC>` device identifier. Once Wi-Fi connects, the BLE stack is completely deinitialized.
+2. **Two-Phase ThingsBoard Registration & Persistent Claiming (`APP_02`):** Automatically provisions its device entity via `/provision/request` to obtain a permanent access token (`tb_token`), then guides the customer through `v1/devices/me/claim` with an on-screen 6-character Claim PIN and 180-second countdown timer.
+3. **Server-Driven Kelvin Telemetry & Dynamic Wake Cadence (`APP_01`, `APP_02`):** Publishes server-specified telemetry in **Kelvin ($\text{K}$)** (`rh`, `temp`, `battery`, `rssi`) and synchronizes dynamic **Flow A** (headless sensor sample) and **Flow B** (cloud sync + e-Paper refresh) wake intervals from ThingsBoard Shared Attributes.
+4. **Three-Screen Two-Button User Interface (`APP_04`):** Features an explicit `[ AWAKE ]` vs. `ZZZ SLEEP` mode badge, a hardcoded 30-second interactive timeout, and three user screens (**Main Dashboard**, **Diagnostics & Tri-Node Metrology**, and **System States, Alarms & Actions**) plus modal screens for BLE Provisioning, Claiming, and Dual-Slot OTA updates (`APP_06`).
 
-    subgraph AppRepo["HUMID1-OS (Application Layer)"]
-        subgraph RootAssets["Root Level"]
-            Assets["assets/ (Branding, Graphic Assets, Audio Clips)"]
-            AppDocs["docs/architecture/ (Full Application Specification Suite)"]
-        end
+---
 
-        subgraph FirmwareDir["firmware/"]
-            AppMain["main/ (Application Logic, Dashboard Screen, Cloud Client)"]
-            ComponentYml["idf_component.yml (Pulls H1OS v2.4.4-dev at Compile Time)"]
-            PartTable["partitions.csv (Canonical H1OS Dual-OTA Partition Table)"]
-            SdkConfig["sdkconfig.defaults (Hardware & Stack Invariants)"]
-        end
-    end
+## 2. Repository Structure
 
-    subgraph UpstreamOS["H1OS v2.4.4-dev (Humidyne-Labs/H1OS)"]
-        H1OS_API["H1OS Public API (h1os.h, h1os_lvgl.h, h1os_time.h)"]
-        H1OS_HAL["Hardware Orchestrator, Subsystems, ULP Coprocessor"]
-    end
+| Path | Description |
+| :--- | :--- |
+| [`Architectural_Outline.md`](Architectural_Outline.md) | Master architectural blueprint, system lifecycle diagram, and specification index. |
+| [`AGENTS.md`](AGENTS.md) | Mandatory workflow, coding standards, and audit rules for AI coding agents. |
+| [`CHANGELOG.md`](CHANGELOG.md) | Semantic Versioning 2.0.0 release and modification log. |
+| [`docs/h1os_reference.md`](docs/h1os_reference.md) | Complete Layer 1–4 H1OS middleware API and hardware pinout reference. |
+| [`docs/architecture/APP_01..08`](docs/architecture/) | Authoritative subsystem specifications (`APP_01` through `APP_08`). |
+| [`docs/audits/APP_AUDIT_01_infrastructure_and_api_review.md`](docs/audits/APP_AUDIT_01_infrastructure_and_api_review.md) | Full-stack audit of ThingsBoard Rule Chains, Web Dashboard, and H1OS API mandates. |
+| [`firmware/`](firmware/) | Clean-state ESP-IDF v5.4.1 project with modular C/H headers and skeleton implementations. |
+| [`.agents/`](.agents/) | Agent rules (`.agents/rules/*.md`) and domain skills (`.agents/skills/*/SKILL.md`). |
 
-    ComponentYml -.->|Git Pull at Compile Time| UpstreamOS
-    AppMain -->|Includes| H1OS_API
-    H1OS_API --> H1OS_HAL
-    AppMain <-->|MQTT / Telemetry / Attributes| TB
-    AppMain <-->|Dual-OTA Partitions| OTA_Srv
+---
+
+## 3. Quickstart & Build Instructions
+
+### 3.1 Prerequisites
+- **ESP-IDF v5.4.1** installed and exported in your shell environment.
+- Python 3.10+ with `Pillow` installed for 1-BPP LVGL font generation (`generate_1bpp_fonts.py`).
+
+### 3.2 Building & Flashing
+```bash
+cd firmware
+idf.py set-target esp32s3
+idf.py build
+idf.py -p /dev/ttyACM0 flash monitor
 ```
 
-- **H1OS Middleware (`Humidyne-Labs/H1OS`)**: Handles SSD1681 1-bit display rendering, 6-cycle anti-ghosting full refreshes, SHTC3 zero-heat psychrometrics, PCF85063A RTC, ES8311 audio codecs, battery LDO latching (`GPIO 17`), and ULP-RISC-V coprocessor execution.
-- **`HUMID1-OS` Application**: Implements the humidor end-user experience, LVGL v9 screens, BLE GATT provisioning, acoustic event chimes, and telemetry reporting to our self-hosted cloud.
-
----
-
-## 2. Self-Hosted Custom Cloud Infrastructure
-
-Unlike consumer IoT devices dependent on proprietary third-party clouds:
-- **Dedicated Self-Hosting:** Device telemetry, dynamic shared attributes, and OTA deployment pipelines connect directly to **Humid1's self-hosted ThingsBoard Community Edition instance running on our custom cloud ([Humid1.com](https://www.humid1.com/))**.
-- **Data Privacy & Ownership:** Users own all environmental data with complete independence from third-party SaaS cloud platforms.
-- **Dynamic Configuration:** Temperature units (°F / °C / K), duty cycle sleep intervals (60s to 24h), sound toggles, and multi-stage humidor warning/critical alarm thresholds are dynamically synchronized from the server.
-
----
-
-## 3. Comprehensive Documentation Suite
-
-- **[System Architecture Blueprint](Architectural_Outline.md)**: High-level system overview and lifecycle flow.
-- **[APP_01: System Architecture & Lifecycle](docs/architecture/APP_01_system_architecture.md)**: State machine, duty cycles, and H1OS boundary.
-- **[APP_02: Self-Hosted ThingsBoard & Cloud Integration](docs/architecture/APP_02_cloud_and_telemetry.md)**: Cloud schema, telemetry keys, shared attributes, and claiming protocol.
-- **[APP_03: BLE GATT Provisioning Specification](docs/architecture/APP_03_ble_provisioning.md)**: BLE onboarding protocol and Proof of Possession PIN.
-- **[APP_04: LVGL v9 UI Architecture & Screen Specifications](docs/architecture/APP_04_ui_and_screens.md)**: 1-bit monochrome UI layouts, humidor dashboard, and alert inversion mode.
-- **[APP_05: Audio Subsystem & Acoustic Event Chimes](docs/architecture/APP_05_audio_feedback.md)**: Acoustic feedback matrix and quiet hours.
-- **[APP_06: Over-The-Air (OTA) Firmware Deployment](docs/architecture/APP_06_ota_management.md)**: Dual-slot OTA update workflows and diagnostic rollback guards.
-- **[APP_07: OS API Feature Mandates](docs/architecture/APP_07_os_api_mandates.md)**: Formal register of upstream H1OS API requests, packaging fixes, and enhancements.
-- **[H1OS Middleware Reference](docs/h1os_reference.md)**: Hardware specifications and silicon errata.
-
----
-
-## 4. Hardware Platform Specifications
-
-Standardized on the **Waveshare ESP32-S3 Touch-ePaper-1.54" V2 (SKU: 32298)**:
-- **SoC:** Espressif ESP32-S3-PICO-1-N8R8 (Xtensa® dual-core 32-bit LX7 @ up to 240 MHz, 8 MB Flash, 8 MB Octal PSRAM).
-- **Display:** 1.54-inch 200×200 pixel monochrome e-Paper display (SSD1681 driver, non-touch).
-- **Environmental Sensor:** Sensirion SHTC3 (I2C `0x70`) high-precision temperature & relative humidity sensor.
-- **Real-Time Clock:** NXP PCF85063A ultra-low-power calendar RTC (I2C `0x51`) with 32.768 kHz crystal backup.
-- **Audio:** Everest Semi ES8311 I2S codec + NS4168 Class-D amplifier driving an onboard speaker.
-- **Storage:** MicroSD card slot (1-bit SDMMC FATFS mode) + Onboard Flash partitions (`epd_frame`, `nvs`, `storage`).
-- **Power Architecture:** Discrete LDO battery power hold latch (`GPIO 17`), calibrated battery voltage ADC (`GPIO 4`), and physical button wake (`GPIO 18`).
-
----
-
-## 5. Build & Development Instructions
-
-### Prerequisites
-- **ESP-IDF v6.1** installed in canonical path (`C:\esp\v6.1\esp-idf`).
-- Git for Windows.
-
-### Compilation
-1. Open PowerShell and activate the ESP-IDF v6.1 environment:
-   ```powershell
-   . C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1
-   ```
-2. Navigate to the `firmware/` directory:
-   ```powershell
-   cd firmware
-   ```
-3. Build the application (ESP-IDF Component Manager automatically resolves H1OS from Git):
-   ```powershell
-   idf.py build
-   ```
-4. Flash and monitor the hardware target:
-   ```powershell
-   idf.py -p COM3 flash monitor
-   ```
-
----
-
-## 6. License
-
-This project is licensed under the [MIT License](LICENSE).  
-Brand assets and media in `assets/` are governed by [LICENSE-ASSETS](LICENSE-ASSETS).
+### 3.3 Running Automated Pre-Flight Verification Gates
+Before committing any changes, run the repository verification suite from the root directory:
+```bash
+python3 firmware/tools/agent/sanitize.py
+python3 firmware/tools/agent/check_string_width.py
+```

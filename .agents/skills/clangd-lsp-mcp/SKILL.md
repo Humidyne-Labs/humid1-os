@@ -24,7 +24,7 @@ When opening or indexing the workspace, LLVM `clangd` searches the project root 
 **If no root-level `compile_commands.json` exists**, the agent must create an NTFS hardlink from the active build directory:
 ```powershell
 if (-not (Test-Path "compile_commands.json")) {
-    New-Item -ItemType HardLink -Path "compile_commands.json" -Target "examples/H1OS/build_dev/compile_commands.json"
+    New-Item -ItemType HardLink -Path "compile_commands.json" -Target "firmware/build/compile_commands.json"
 }
 ```
 *Benefits:*

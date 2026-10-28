@@ -12,7 +12,7 @@ Before executing a merge into `main`, the developer or autonomous agent **MUST**
 
 ```mermaid
 flowchart TD
-    A0["0a. Identity & Name Audit\n(python firmware/tools/agent/sanitize.py --check)"] --> A0b["0b. Asset Shrink & Quantization\n(/shrink: optimize_images + optimize_pdf)"]
+    A0["0a. Identity & Name Audit\n(python3 firmware/tools/agent/sanitize.py --check)"] --> A0b["0b. Asset Shrink & Quantization\n(/shrink: optimize_images + optimize_pdf)"]
     A0b --> A["1. Code & Build Verification\n(idf.py build: 0 warnings, 0 errors)"]
     A["1. Code & Build Verification\n(idf.py build: 0 warnings, 0 errors)"] --> B["2. Rev Semantic Version Strings\n(firmware/main/app_config.h, idf_component.yml, README.md)"]
     B --> C["3. Synchronous Architecture Documentation\n(docs/architecture/ and APP_07_os_api_mandates.md)"]
@@ -73,6 +73,6 @@ Before merging:
 Before committing or merging:
 1. Run the identity & name sanitizer:
    ```powershell
-   python firmware/tools/agent/sanitize.py --check
+   python3 firmware/tools/agent/sanitize.py --check
    ```
 2. Verify zero personal workstation paths, developer user names, or machine-specific tokens are staged.

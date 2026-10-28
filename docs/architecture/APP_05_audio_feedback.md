@@ -1,32 +1,56 @@
-# APP_05: Audio Subsystem & Acoustic Event Chimes
+# APP_05: Acoustic Feedback, Attribute Gating & Power Isolation
 
-## 1. Acoustic Hardware Pipeline
-The Waveshare ESP32-S3 ePaper 1.54" V2 board integrates an Everest Semi **ES8311 I2S low-power codec** paired with an **NS4168 Class-D mono power amplifier** driving an onboard miniature speaker.
-
-All low-level I2S DMA streaming, ES8311 CSM ready status polling (Reg `0xFC`), soft-mute zero-cross ramps, and power gating are managed by the H1OS audio worker (`sub_audio.h` / `h1os_audio_worker`).
-
----
-
-## 2. Audio Sample Storage & SPIFFS Catalog
-1. **Flash Partition:** Audio clips and acoustic tone tables are stored in the dedicated `storage` SPIFFS partition (`0x1DC000`, 1904 KB).
-2. **Audio Formats:** Supported formats include raw 16-bit signed mono PCM clips (at 16 kHz or 24 kHz) and frequency tone tables.
-3. **Optional External SDMMC:** If an external FAT32 MicroSD card is present, extended voice alert catalogs (e.g. spoken alerts) can be streamed via `sub_sdcard`.
+* **Document ID:** `APP-ARCH-005` (Rev 2.0)
+* **Parent Blueprint:** [`Architectural_Outline.md`](../../Architectural_Outline.md)
+* **Normative Scope:** ES8311 + NS4168 Audio Pipeline Usage, Dual Attribute/Hardware Gates (`sound_enabled` & `has_sd_card`), and Unattended Deep-Sleep Silence Invariant
 
 ---
 
-## 3. Application Sound Events & Trigger Matrix
+## 1. Acoustic Feedback Architecture
 
-| Event Name | Acoustic Pattern / Tone | Trigger Condition |
-| :--- | :--- | :--- |
-| **`CHIME_BOOT`** | Ascending three-tone chime (523 Hz -> 659 Hz -> 784 Hz) | Cold boot or resume from manual power cycle. |
-| **`CHIME_NOTIFY`** | Short crisp dual-tone chirp (880 Hz -> 1046 Hz) | Wi-Fi associated, BLE pairing success, or device claimed. |
-| **`CHIME_ALARM`** | Rapid warble tone (880 Hz <-> 1175 Hz, 3 cycles) | ThingsBoard active alarm notification or claim timeout. |
-| **`CHIME_SHUTDOWN`** | Descending three-tone chime (784 Hz -> 659 Hz -> 523 Hz) | Clean physical power button shutdown. |
+The Humid1 hardware integrates an **ES8311 low-power mono audio codec** (I2C address `0x18`, I2S digital audio bus) paired with an **NS4168 Class-D power amplifier** gated by active-low `PA_EN` (`GPIO 46`, via inverter). H1OS encapsulates the entire I2S DMA streaming and amplifier power-rail sequence behind a single non-blocking API:
+
+```c
+esp_err_t h1os_audio_play_Async(const char *filepath);
+```
+
+- **Storage Medium:** Uncompressed 16-bit PCM `.wav` assets reside on the FATFS microSD card mounted by H1OS at `/sdcard/`.
+- **Non-Blocking Execution:** `h1os_audio_play_Async()` spawns a dedicated background FreeRTOS worker inside H1OS that powers up `PA_EN`, streams the `.wav` file over I2S DMA, and automatically shuts down the NS4168 amplifier and ES8311 DAC upon completion. Application UI and network threads must **never** busy-wait on audio playback.
 
 ---
 
-## 4. Power & Quiet-Hours Rules
-1. **Zero Quiescent Draw:** The NS4168 amplifier power rail is held de-asserted when no audio is playing to eliminate battery leakage.
-2. **Dynamic Server Switch (`sound_enabled`):**
-   - The master audio toggle is dictated by ThingsBoard shared attributes (`sound_enabled: true/false`).
-   - When set to `false`, all notification and alarm chimes are muted to avoid nocturnal disturbance in residential humidor environments.
+## 2. Mandatory Three-Condition Playback Gate
+
+Every acoustic event in `humid1-os` must pass a deterministic three-condition gate before invoking `h1os_audio_play_Async()`:
+
+```c
+bool app_audio_can_play(const app_state_t *state, bool is_rtc_wake) {
+    if (is_rtc_wake) {
+        return false; // Rule 1: Unattended periodic Flow B wakes are strictly silent
+    }
+    if (!state->attrs.sound_enabled) {
+        return false; // Rule 2: Server/NVS sound_enabled attribute must be true
+    }
+    if (!h1os_sdcard_is_mounted()) {
+        return false; // Rule 3: MicroSD card must be physically present and mounted
+    }
+    return true;
+}
+```
+
+1. **Condition 1 — Interactive Session Only (`!is_rtc_wake`):** Unattended periodic `Flow B` wakes occur every 15 minutes day and night. Enabling the Class-D amplifier during unattended wakes would disturb users and waste $\sim 45\text{--}120\,\text{mA}$ of battery current. Audio cues are strictly restricted to interactive sessions (`AWAKE`) and explicit user onboarding transitions.
+2. **Condition 2 — User Mute Preference (`sound_enabled`):** Synchronized from the ThingsBoard Shared Attribute `sound_enabled` and cached in NVS key `"sound_en"`.
+3. **Condition 3 — Media Availability (`h1os_sdcard_is_mounted()`):** Verified at boot and reported to ThingsBoard via the Client Attribute `"has_sd_card"` and `"audio_synced"`.
+
+---
+
+## 3. Canonical Audio Asset Map (`/sdcard/`)
+
+| Event Trigger | Asset Path | Duration | Description |
+| :--- | :--- | :--- | :--- |
+| **Button Tap (`BOOT` / `POWER`)** | `/sdcard/ui_tap.wav` | $\le 60\,\text{ms}$ | Crisp tactile confirmation click on screen navigation. |
+| **Action Confirm (2s Hold)** | `/sdcard/ui_confirm.wav` | $\le 180\,\text{ms}$ | Dual-tone chime confirming theme toggle or sync request. |
+| **Onboarding / Claim Complete** | `/sdcard/claim_ok.wav` | $\le 450\,\text{ms}$ | Ascending triad played when Wi-Fi + customer claim succeed. |
+| **Server Warning Alarm** | `/sdcard/alarm_warn.wav` | $\le 600\,\text{ms}$ | Played once upon interactive wake if `alarm_state.severity == "WARNING"`. |
+| **Server Critical Alarm** | `/sdcard/alarm_crit.wav` | $\le 900\,\text{ms}$ | Played upon interactive wake if `alarm_state.severity == "CRITICAL"`. |
+| **Error / Auth Failure** | `/sdcard/err_buzz.wav` | $\le 300\,\text{ms}$ | Low double-tone played on BLE Wi-Fi authentication failure. |

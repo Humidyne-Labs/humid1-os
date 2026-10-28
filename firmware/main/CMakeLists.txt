@@ -1,12 +1,39 @@
 idf_component_register(
     SRCS
         "main.c"
+        "app_state.c"
+        "net_wifi_ble.c"
+        "cloud_tb.c"
+        "app_ota.c"
         "screens/screen_dashboard.c"
+        "screens/screen_diagnostics.c"
+        "screens/screen_system.c"
+        "screens/screen_onboarding.c"
     INCLUDE_DIRS
         "."
         "screens"
     REQUIRES
         h1os
-        freertos
-        log
+        nvs_flash
+        esp_wifi
+        esp_event
+        esp_netif
+        wifi_provisioning
+        protocomm
+        bt
+        mqtt
+        esp-tls
+        esp_https_ota
+        app_update
+        json
+)
+
+target_compile_options(${COMPONENT_LIB} PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wdouble-promotion
+    -Wshadow
+    -Wunused-result
+    -fstack-usage
 )

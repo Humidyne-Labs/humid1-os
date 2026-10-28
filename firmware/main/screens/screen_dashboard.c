@@ -1,94 +1,100 @@
 /**
  * @file screen_dashboard.c
- * @brief Humidor Environmental Telemetry Dashboard Screen Implementation
- *
- * Copyright (c) 2026 Humidyne Labs
- * SPDX-License-Identifier: MIT
+ * @brief Clean-state LVGL v9 1-bit monochrome implementation of Screen 1 (Main Dashboard).
  */
 
 #include "screen_dashboard.h"
-#include "h1os/h1os_lvgl.h"
 #include <stdio.h>
+#include "h1os/h1os.h"
 
-void screen_dashboard_render(const h1os_telemetry_t *telem, uint32_t cycle_count)
+static lv_obj_t *s_cont_dash   = NULL;
+static lv_obj_t *s_lbl_header  = NULL;
+static lv_obj_t *s_lbl_mode    = NULL;
+static lv_obj_t *s_lbl_alarm   = NULL;
+static lv_obj_t *s_lbl_rh      = NULL;
+static lv_obj_t *s_lbl_temp    = NULL;
+static lv_obj_t *s_lbl_dew     = NULL;
+static lv_obj_t *s_lbl_footer  = NULL;
+
+static lv_obj_t *create_1bpp_label(lv_obj_t *parent, const lv_font_t *font,
+                                   int32_t x, int32_t y, const char *initial_text)
 {
-    h1os_lvgl_lock(100);
+    lv_obj_t *lbl = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl, font, 0);
+    lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
+    lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(lbl, (int32_t)APP_UI_SAFE_TEXT_WIDTH_PX);
+    lv_obj_set_pos(lbl, x, y);
+    lv_label_set_text(lbl, initial_text);
+    return lbl;
+}
 
-    lv_obj_t *scr = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(scr, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(scr, LV_OPA_COVER, 0);
-
-    /* Header Bar */
-    lv_obj_t *header = lv_label_create(scr);
-    lv_label_set_text(header, "HUMID1-OS");
-    lv_obj_align(header, LV_ALIGN_TOP_LEFT, 6, 6);
-
-    /* Battery / Status in Header */
-    lv_obj_t *lbl_bat = lv_label_create(scr);
-    if (telem->is_usb_powered) {
-        lv_label_set_text(lbl_bat, LV_SYMBOL_CHARGE " USB");
-    } else {
-        lv_label_set_text_fmt(lbl_bat, LV_SYMBOL_BATTERY_FULL " %u%%", telem->battery_percent);
+void screen_dashboard_create(lv_obj_t *root)
+{
+    if (root == NULL) {
+        return;
     }
-    lv_obj_align(lbl_bat, LV_ALIGN_TOP_RIGHT, -6, 6);
 
-    /* Top Divider Line */
-    static lv_point_precise_t top_line_pts[] = {{4, 22}, {196, 22}};
-    lv_obj_t *top_line = lv_line_create(scr);
-    lv_line_set_points(top_line, top_line_pts, 2);
-    lv_obj_set_style_line_width(top_line, 1, 0);
-    lv_obj_set_style_line_color(top_line, lv_color_black(), 0);
+    s_cont_dash = lv_obj_create(root);
+    lv_obj_remove_style_all(s_cont_dash);
+    lv_obj_set_size(s_cont_dash, (int32_t)APP_UI_SCREEN_WIDTH_PX, (int32_t)APP_UI_SCREEN_HEIGHT_PX);
+    lv_obj_set_style_bg_color(s_cont_dash, lv_color_white(), 0);
+    lv_obj_set_style_bg_opa(s_cont_dash, LV_OPA_COVER, 0);
 
-    /* Large Relative Humidity Readout (Primary Humidor Metric) */
-    lv_obj_t *lbl_rh = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_rh, "%.1f%%", (double)telem->ambient_rh_pct);
-    lv_obj_align(lbl_rh, LV_ALIGN_TOP_MID, 0, 36);
+    s_lbl_header = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 4, "HUMID1 READY");
+    s_lbl_mode   = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 134, 4, "[ AWAKE ]");
+    s_lbl_alarm  = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 26, "STATUS: NOMINAL");
+    s_lbl_rh     = create_1bpp_label(s_cont_dash, h1os_font_hero_48, 6, 52, "--.-%");
+    s_lbl_temp   = create_1bpp_label(s_cont_dash, h1os_font_ui_16, 6, 122, "TEMP: --.- F");
+    s_lbl_dew    = create_1bpp_label(s_cont_dash, h1os_font_ui_14, 6, 148, "DEW:  --.- F");
+    s_lbl_footer = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 178, "BAT: --% (----mV)");
+}
 
-    lv_obj_t *lbl_rh_desc = lv_label_create(scr);
-    lv_label_set_text(lbl_rh_desc, "RELATIVE HUMIDITY");
-    lv_obj_align(lbl_rh_desc, LV_ALIGN_TOP_MID, 0, 68);
-
-    /* Mid Divider Line */
-    static lv_point_precise_t mid_line_pts[] = {{4, 90}, {196, 90}};
-    lv_obj_t *mid_line = lv_line_create(scr);
-    lv_line_set_points(mid_line, mid_line_pts, 2);
-    lv_obj_set_style_line_width(mid_line, 1, 0);
-    lv_obj_set_style_line_color(mid_line, lv_color_black(), 0);
-
-    /* Temperature Readout (Dual F & C) */
-    lv_obj_t *lbl_temp_f = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_temp_f, "%.1f°F", (double)telem->ambient_temp_f);
-    lv_obj_align(lbl_temp_f, LV_ALIGN_TOP_LEFT, 10, 104);
-
-    lv_obj_t *lbl_temp_c = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_temp_c, "(%.1f°C)", (double)telem->ambient_temp_c);
-    lv_obj_align(lbl_temp_c, LV_ALIGN_TOP_LEFT, 10, 126);
-
-    /* Dew Point Readout */
-    lv_obj_t *lbl_dew = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_dew, "Dew: %.1f°F", (double)telem->dew_point_f);
-    lv_obj_align(lbl_dew, LV_ALIGN_TOP_RIGHT, -10, 104);
-
-    lv_obj_t *lbl_dew_c = lv_label_create(scr);
-    lv_label_set_text_fmt(lbl_dew_c, "(%.1f°C)", (double)telem->dew_point_c);
-    lv_obj_align(lbl_dew_c, LV_ALIGN_TOP_RIGHT, -10, 126);
-
-    /* Bottom Divider Line */
-    static lv_point_precise_t btm_line_pts[] = {{4, 154}, {196, 154}};
-    lv_obj_t *btm_line = lv_line_create(scr);
-    lv_line_set_points(btm_line, btm_line_pts, 2);
-    lv_obj_set_style_line_width(btm_line, 1, 0);
-    lv_obj_set_style_line_color(btm_line, lv_color_black(), 0);
-
-    /* Status Footer: Humidor Status / Settled Status */
-    lv_obj_t *lbl_footer = lv_label_create(scr);
-    if (telem->is_thermally_settled) {
-        lv_label_set_text_fmt(lbl_footer, "SETTLED | CYCLE #%lu", (unsigned long)cycle_count);
-    } else {
-        lv_label_set_text_fmt(lbl_footer, "SETTLING (%u%%) | #%lu", telem->trinode_confidence_pct, (unsigned long)cycle_count);
+void screen_dashboard_update(const app_context_t *ctx)
+{
+    if (ctx == NULL || s_cont_dash == NULL) {
+        return;
     }
-    lv_obj_align(lbl_footer, LV_ALIGN_BOTTOM_MID, 0, -8);
 
-    lv_screen_load(scr);
-    h1os_lvgl_unlock();
+    char buf[48] = {0};
+    const char *id_str = (ctx->attrs.device_nickname[0] != '\0')
+                             ? ctx->attrs.device_nickname
+                             : ctx->attrs.device_uid;
+
+    snprintf(buf, sizeof(buf), "%s %.11s",
+             ctx->wifi_connected ? "OK" : "OFF", id_str);
+    lv_label_set_text(s_lbl_header, buf);
+
+    lv_label_set_text(s_lbl_mode, ctx->is_interactive ? "[ AWAKE ]" : "ZZZ SLEEP");
+
+    const app_rtc_cache_t *rtc = (const app_rtc_cache_t *)0;
+    (void)rtc;
+    lv_label_set_text(s_lbl_alarm, "STATUS: NOMINAL");
+
+    snprintf(buf, sizeof(buf), "%.1f%%", (double)ctx->telemetry.rh_pct);
+    lv_label_set_text(s_lbl_rh, buf);
+
+    const float disp_temp = app_kelvin_to_display(ctx->telemetry.temp_k, ctx->attrs.temp_unit);
+    const float disp_dew  = app_kelvin_to_display(ctx->telemetry.dew_point_k, ctx->attrs.temp_unit);
+    const char  unit_ch   = app_temp_unit_char(ctx->attrs.temp_unit);
+
+    snprintf(buf, sizeof(buf), "TEMP: %.1f %c", (double)disp_temp, unit_ch);
+    lv_label_set_text(s_lbl_temp, buf);
+
+    snprintf(buf, sizeof(buf), "DEW:  %.1f %c", (double)disp_dew, unit_ch);
+    lv_label_set_text(s_lbl_dew, buf);
+
+    if (ctx->telemetry.vbus_present) {
+        snprintf(buf, sizeof(buf), "USB CHG (%u mV)", (unsigned int)ctx->telemetry.vbat_mv);
+    } else {
+        snprintf(buf, sizeof(buf), "BAT: %u%% (%u mV)",
+                 (unsigned int)ctx->telemetry.battery_pct,
+                 (unsigned int)ctx->telemetry.vbat_mv);
+    }
+    lv_label_set_text(s_lbl_footer, buf);
+}
+
+lv_obj_t *screen_dashboard_get_container(void)
+{
+    return s_cont_dash;
 }

@@ -70,22 +70,22 @@ Montserrat is a **proportional (variable-width)** font with 4-bit fractional adv
 Calculates exact sub-pixel string width $\sum(\text{adv\_w} + \text{kern})$ with per-character breakdown:
 ```powershell
 # Evaluate string against 188px limit in Montserrat-14 (default):
-python tools/agent/check_string_width.py "Power: CHARGED 4.00V"
+python3 firmware/tools/agent/check_string_width.py "Power: CHARGED 4.00V"
 
 # Evaluate in a different font size (e.g. 20pt hero text):
-python tools/agent/check_string_width.py --size 20 "72.5% RH"
+python3 firmware/tools/agent/check_string_width.py --size 20 "72.5% RH"
 ```
 
 ### B. Automated Screen File Audit (`--audit-screens`)
-Scans all C screen files in `examples/H1OS/main/screens/`, extracts string formatting templates, simulates worst-case parameter expansion, and asserts that no string exceeds $188.0\text{ px}$:
+Scans all C screen files in `firmware/main/screens/`, extracts string formatting templates, simulates worst-case parameter expansion, and asserts that no string exceeds $188.0\text{ px}$:
 ```powershell
-python tools/agent/check_string_width.py --audit-screens
+python3 firmware/tools/agent/check_string_width.py --audit-screens
 ```
 
 ### C. Re-Extract Font Metrics & Kerning CSVs
 Re-generates all 12 CSV tables from generated LVGL 1bpp C font files:
 ```powershell
-python tools/agent/extract_font_metrics.py
+python3 firmware/tools/agent/extract_font_metrics.py
 ```
 
 ### D. Query Metrics via DuckDB SQL

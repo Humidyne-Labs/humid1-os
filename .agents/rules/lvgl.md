@@ -183,15 +183,15 @@ To prevent horizontal text clipping and overflow on the 200x200 display (maximum
 ### Verification Tools
 * **Single String Width Calculation (CLI):**
   ```powershell
-  python tools/agent/check_string_width.py --size 14 "Power: CHARGED 4.00V"
+  python3 firmware/tools/agent/check_string_width.py --size 14 "Power: CHARGED 4.00V"
   ```
 * **Full Screen Template Automated Audit:**
   ```powershell
-  python tools/agent/check_string_width.py --audit-screens
+  python3 firmware/tools/agent/check_string_width.py --audit-screens
   ```
 * **Font Metric Extractor:**
   ```powershell
-  python tools/agent/extract_font_metrics.py
+  python3 firmware/tools/agent/extract_font_metrics.py
   ```
 * **DuckDB SQL Query:**
   ```sql

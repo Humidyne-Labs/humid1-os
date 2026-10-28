@@ -33,8 +33,8 @@ This rule defines mandatory repository hygiene policies for binary assets, image
 ### Full Repository Asset Shrink & Harmonization Pass:
 ```powershell
 # 1. Quantize & stamp photos with HUMIDITRON/HUMADYNE_LABS EXIF
-python firmware/tools/agent/optimize_images.py assets/
+python3 firmware/tools/agent/optimize_images.py assets/
 
 # 2. Losslessly harmonize PDF metadata
-python firmware/tools/agent/optimize_pdf.py docs/
+python3 firmware/tools/agent/optimize_pdf.py docs/
 ```

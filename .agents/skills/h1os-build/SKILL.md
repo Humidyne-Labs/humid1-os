@@ -48,7 +48,7 @@ Forces a clean CMake re-generation applying the exact preset configs:
 
 > [!CRITICAL]
 > **Mandatory `sdkconfig` Removal Invariant:**
-> ESP-IDF's Kconfig defaults policy prioritizes an existing `examples/H1OS/sdkconfig`. When switching presets (e.g. from `dev` to `prod` or vice versa), **YOU MUST ERASE `sdkconfig` AND `sdkconfig.old` FIRST**!
+> ESP-IDF's Kconfig defaults policy prioritizes an existing `firmware/sdkconfig`. When switching presets (e.g. from `dev` to `prod` or vice versa), **YOU MUST ERASE `sdkconfig` AND `sdkconfig.old` FIRST**!
 > Failing to remove `sdkconfig` causes CMake to retain old settings (e.g. `-Og`, debug log levels, heap poisoning) rather than applying the target preset defaults.
 
 ```powershell
@@ -77,7 +77,7 @@ Generates deep per-component, per-file, binary header breakdown and partition he
 & "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"; python inspect_size.py -B build_prod
 
 # From project root tools/:
-& "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"; python tools/inspect_size.py -B examples/H1OS/build_prod
+& "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"; python tools/inspect_size.py -B firmware/build
 
 # Optional: Force a full firmware rebuild before measuring:
 & "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"; python inspect_size.py -B build_prod --rebuild
