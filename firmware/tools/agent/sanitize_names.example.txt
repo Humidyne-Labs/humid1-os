@@ -1,0 +1,29 @@
+# ==============================================================================
+# H1OS Identity & Name Sanitization Configuration Template
+#
+# Usage:
+#   Copy this template to 'tools/agent/sanitize_names.txt' or '.sanitize_names'.
+#   'sanitize_names.txt' is git-ignored to keep all local identities private.
+#
+# Syntax:
+#   REPLACEMENT = <Name>         (Default replacement string, case-sensitive)
+#   <target_word_or_path>        (Case-agnostic match, replaced with REPLACEMENT)
+#   <target> => <replacement>    (Case-agnostic target, specific replacement)
+#   IGNORE = <word>              (Whitelist words to never flag or replace)
+# ==============================================================================
+
+# Default entity replacement name:
+REPLACEMENT = Humiditron
+
+# Multi-word full identities (matched first to prevent double-replacement):
+Alice Smith => Humiditron
+Bob Jones => Humiditron
+
+# Individual username or name tokens (case-agnostic, whole-word matched):
+asmith
+bjones
+
+# Optional whitelisted tokens / exceptions:
+IGNORE = sample
+IGNORE = testing
+IGNORE = placeholder

@@ -1,0 +1,5 @@
+dependencies:
+  idf: ">=5.1"
+  h1os:
+    git: "https://github.com/Humidyne-Labs/H1OS.git"
+    path: "components/h1os"

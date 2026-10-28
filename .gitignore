@@ -1,2 +1,33 @@
-Source_Code/stage/humid1-os/dependencies.lock
-/Source_Code/stage/.vscode
+# ESP-IDF build artifacts
+build/
+build_dev/
+build_prod/
+firmware/build/
+firmware/build_*/
+firmware/managed_components/
+firmware/dependencies.lock
+firmware/sdkconfig
+firmware/sdkconfig.old
+firmware/sdkconfig.ci
+firmware/sdkconfig.dev
+firmware/sdkconfig.prod
+
+# IDE & Editor files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/c_cpp_properties.json
+.idea/
+*.swp
+*.bak
+*~
+
+# Clangd indexing & compilation databases
+.cache/
+firmware/.cache/
+compile_commands.json
+firmware/compile_commands.json
+
+# OS generated files
+.DS_Store
+Thumbs.db

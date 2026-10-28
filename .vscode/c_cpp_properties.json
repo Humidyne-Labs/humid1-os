@@ -1,0 +1,26 @@
+{
+  "configurations": [
+    {
+      "name": "ESP32-S3",
+      "compilerPath": "${env:USERPROFILE}/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/bin/xtensa-esp32s3-elf-gcc.exe",
+      "compileCommands": "${workspaceFolder}/firmware/build/compile_commands.json",
+      "cStandard": "gnu17",
+      "cppStandard": "gnu++23",
+      "intelliSenseMode": "windows-gcc-arm",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/firmware/main/**",
+        "${workspaceFolder}/firmware/managed_components/**",
+        "C:/esp/v6.1/esp-idf/components/**"
+      ],
+      "browse": {
+        "path": [
+          "${workspaceFolder}/firmware",
+          "C:/esp/v6.1/esp-idf/components"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}

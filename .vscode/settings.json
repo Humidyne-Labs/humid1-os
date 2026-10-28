@@ -1,0 +1,18 @@
+{
+  "C_Cpp.intelliSenseEngine": "default",
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/firmware/build/compile_commands.json",
+  "clangd.path": "C:\\Espressif\\tools\\esp-clangd\\esp-21.1.3_20260408\\esp-clangd\\bin\\clangd.exe",
+  "clangd.arguments": [
+    "--background-index",
+    "--query-driver=**",
+    "--compile-commands-dir=${workspaceFolder}\\firmware\\build"
+  ],
+  "idf.espIdfPath": "C:\\esp\\v6.1\\esp-idf",
+  "idf.toolsPath": "${env:USERPROFILE}\\.espressif",
+  "idf.pythonBinPath": "${env:USERPROFILE}\\.espressif\\python_env\\idf6.1_py3.14_env\\Scripts\\python.exe",
+  "idf.customExtraPaths": "${env:USERPROFILE}\\.espressif\\tools\\xtensa-esp-elf\\esp-15.2.0_20251204\\xtensa-esp-elf\\bin;${env:USERPROFILE}\\.espressif\\tools\\esp32s3-ulp-elf\\2.38_20240113\\esp32s3-ulp-elf\\bin;${env:USERPROFILE}\\.espressif\\tools\\cmake\\3.30.2\\bin;${env:USERPROFILE}\\.espressif\\tools\\ninja\\1.12.1;${env:USERPROFILE}\\.espressif\\python_env\\idf6.1_py3.14_env\\Scripts",
+  "idf.customExtraVars": {
+    "IDF_TARGET": "esp32s3"
+  },
+  "idf.port": "COM3"
+}

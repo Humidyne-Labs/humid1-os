@@ -1,125 +1,129 @@
-# Humid1-OS: Ecosystem & Cloud Infrastructure
+# HUMID1-OS: Application & Custom Cloud Ecosystem
 
 <p align="center">
-  <img src="./assets/banner_0.png" alt="HUMID1-OS Banner" width="100%">
+  <img src="./assets/banner_0.jpg" alt="HUMID1-OS Banner" width="100%">
 </p>
+
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1-blue.svg)](https://idf.espressif.com/)
+[![H1OS Middleware](https://img.shields.io/badge/H1OS-v2.4.4--dev-brightgreen.svg)](https://github.com/Humidyne-Labs/H1OS)
+[![Hardware](https://img.shields.io/badge/Hardware-Waveshare%20ESP32--S3--ePaper--1.54%20V2-green.svg)](https://www.waveshare.com)
+[![Graphics](https://img.shields.io/badge/LVGL-v9.6.0-orange.svg)](https://lvgl.io/)
+[![Cloud](https://img.shields.io/badge/Cloud-Humid1.com%20Self--Hosted-purple.svg)](https://www.humid1.com/)
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
 [![Donate to Humid1](https://custom-icon-badges.demolab.com/badge/Donate-Humid1.com-4A154B?style=plastic&logo=signupgenius&logoColor=white)](https://tools.signupgenius.com/c/support-humid1-project)  
 
-> [!WARNING]
-> **Project Under Construction:** The `HUMID1-OS` repository and its associated cloud and hardware integration are currently under active development. Features, code structures, and documentation are subject to change.
+**`HUMID1-OS`** is an instrument-grade, open-source environmental telemetry and monitoring application engineered for precision cigar and tobacco humidor management.
 
-> [!NOTE]
-> **Professional Scope:** Designed by **Humiditron**, the `HUMID1-OS` architecture is engineered to demonstrate production-grade IoT competencies, bridging low-level embedded systems with modern cloud-native server administration. It serves as a comprehensive portfolio piece highlighting full-stack ownership—from bare-metal microcontroller firmware to secure cloud orchestration and zero-touch OTA pipelines.
+Built upon **H1OS v2.4.4-dev** as its bare-metal OS and middleware foundation, `HUMID1-OS` delivers deterministic battery longevity, high-contrast 1-bit e-Paper presentation, BLE GATT device onboarding, and seamless telemetry synchronization with **Humid1's self-hosted ThingsBoard instance on our custom cloud ([Humid1.com](https://www.humid1.com/))**.
 
 ---
 
-## 1. Project Overview & Ecosystem Scope
+## 1. Architecture & The H1OS Middleware Backbone
 
-`HUMID1-OS` is a community-driven, open-source, IoT-enabled humidor monitoring ecosystem built for precise, low-maintenance environmental control.
+`HUMID1-OS` maintains a strict separation between low-level hardware control and high-level application workflows:
 
-* **Author:** Humiditron *(also heard as HYOO-mi-DEE-tron)*
-* **Ecosystem Domain:** [Humid1.com](https://www.humid1.com/)
-* **Backend Infrastructure:** ThingsBoard IoT server.
-* **Core Strategy:** Standardizing on a single, off-the-shelf hardware target to eliminate fragmentation, supply chain overhead, and custom debugging complexity. Devices are flashed once during setup, with subsequent configuration and lifecycle updates handled seamlessly Over-The-Air (OTA) via ThingsBoard.
-* **Future Vision:** Opening up the platform for public use as a free service supporting standard hardware.
+```mermaid
+graph TD
+    subgraph CustomCloud["Humid1 Custom Cloud Infrastructure (humid1.com)"]
+        TB["Self-Hosted ThingsBoard Community Edition"]
+        OTA_Srv["Self-Hosted OTA Firmware Server"]
+    end
 
-### Core Engineering Pillars
-* **Embedded Firmware & Hardware Integration:** Direct peripheral management on the ESP32-S3 architecture, handling power profiles, I2C sensor polling (`SHTC3`), real-time clock synchronization, and low-power e-Paper display rendering.
-* **Cloud Infrastructure & DevOps:** End-to-end self-hosting implementation utilizing ThingsBoard as the IoT backend, orchestrated via Docker, secured behind a reverse proxy on a dedicated VPS.
-* **Zero-Touch Maintainability:** Design focus on lifecycle management, utilizing automated Over-The-Air (OTA) deployment strategies and Bluetooth-based provisioning to eliminate friction post-deployment.
+    subgraph AppRepo["HUMID1-OS (Application Layer)"]
+        subgraph RootAssets["Root Level"]
+            Assets["assets/ (Branding, Graphic Assets, Audio Clips)"]
+            AppDocs["docs/architecture/ (Full Application Specification Suite)"]
+        end
 
----
+        subgraph FirmwareDir["firmware/"]
+            AppMain["main/ (Application Logic, Dashboard Screen, Cloud Client)"]
+            ComponentYml["idf_component.yml (Pulls H1OS v2.4.4-dev at Compile Time)"]
+            PartTable["partitions.csv (Canonical H1OS Dual-OTA Partition Table)"]
+            SdkConfig["sdkconfig.defaults (Hardware & Stack Invariants)"]
+        end
+    end
 
-## 2. Hardware Target & Technical Specifications
+    subgraph UpstreamOS["H1OS v2.4.4-dev (Humidyne-Labs/H1OS)"]
+        H1OS_API["H1OS Public API (h1os.h, h1os_lvgl.h, h1os_time.h)"]
+        H1OS_HAL["Hardware Orchestrator, Subsystems, ULP Coprocessor"]
+    end
 
-`HUMID1-OS` standardizes on the **Waveshare ESP32-S3-ePaper-1.54G** (V2 hardware platform) **SKU:32298**, featuring integrated low-power peripherals tailored for sealed environment monitoring.
+    ComponentYml -.->|Git Pull at Compile Time| UpstreamOS
+    AppMain -->|Includes| H1OS_API
+    H1OS_API --> H1OS_HAL
+    AppMain <-->|MQTT / Telemetry / Attributes| TB
+    AppMain <-->|Dual-OTA Partitions| OTA_Srv
+```
 
-### Hardware Specifications (V2 Board)
-* **Microcontroller:** ESP32-S3-PICO-1-N8R8 SoC (Xtensa 32-bit LX7 dual-core processor operating up to 240MHz, with integrated 8MB Flash and 8MB PSRAM in a stacked package).
-* **Display:** 1.54-inch 2-color BW (Black, White) e-Paper panel with a 200x200 resolution, offering ultra-low power consumption and sunlight readability.
-* **Environmental Sensor:** Onboard SHTC3 temperature and humidity sensor connected via shared I2C (GPIO47/48, address `0x70`).
-* **Real-Time Clock (RTC):** Onboard PCF85063 RTC chip for precise time management.
-* **Audio Codec:** Low-power ES8311 audio codec chip with microphone and speaker support.
-* **Storage:** TF card slot (must be formatted as FAT32).
-
-### Critical Board-Specific Power & GPIO Wiring
-To ensure proper operation under deep-sleep states, the firmware accounts for specific hardware circuit requirements:
-* **Battery Power Latch (GPIO17):** Must be driven `HIGH` during boot and frozen via deep-sleep pin holds to maintain the power latch when the physical power button is released.
-* **Panel Power (GPIO6):** Inverted power rail where `LOW` enables power to the e-Paper panel and `HIGH` powers it down during sleep to eliminate idle draw while preserving the image on screen.
-* **Wake Pin (GPIO18):** Connected to the physical `PWR` button (active-low with pull-up) to allow on-demand wake cycles.
-
----
-
-## 3. Firmware Architecture, Provisioning & Power Management
-
-The firmware operates on an optimized **Wake-Read-Refresh-Sleep** duty cycle designed to maximize battery longevity on portable deployments.
-
-* **Duty Cycle:** Wakes up at defined intervals (e.g., every 30 minutes) to poll sensors, update the display once, sync time via SNTP, and return to deep sleep.
-* **Device Provisioning:** Utilizes **Bluetooth Low Energy (BLE)** for seamless, secure initial device provisioning and Wi-Fi credential setup, eliminating cumbersome AP configuration modes.
-* **UI Design Constraints:** Built using LVGL with strict adherence to 2-color palettes (Black, White), opaque fills (`bg_opa: COVER`), disabled animations (`animated: false`), and idle update restrictions to prevent unnecessary full-panel e-Paper refreshes.
+- **H1OS Middleware (`Humidyne-Labs/H1OS`)**: Handles SSD1681 1-bit display rendering, 6-cycle anti-ghosting full refreshes, SHTC3 zero-heat psychrometrics, PCF85063A RTC, ES8311 audio codecs, battery LDO latching (`GPIO 17`), and ULP-RISC-V coprocessor execution.
+- **`HUMID1-OS` Application**: Implements the humidor end-user experience, LVGL v9 screens, BLE GATT provisioning, acoustic event chimes, and telemetry reporting to our self-hosted cloud.
 
 ---
 
-## 4. Cloud Infrastructure & DevOps
+## 2. Self-Hosted Custom Cloud Infrastructure
 
-* **IoT Backend:** ThingsBoard handles device telemetry ingestion, client attribute management, and dashboard visualization.
-* **Deployment & Provisioning:** Containerized via Docker on a rented VPS, ensuring strict data privacy and isolated network orchestration.
-* **OTA Pipelines:** Integrated ThingsBoard OTA mechanisms push incremental firmware updates during scheduled or triggered wake windows.
-
----
-
-## 5. Commercialization & Open-Source Strategy
-
-While initial explorations considered monetizing the product, a thorough cost-benefit analysis revealed major structural hurdles:
-* **Regulatory & Compliance Costs:** Expenses associated with FCC regulatory testing.
-* **Supply Chain & Logistics:** Overhead tied to physical stock storage, warehousing, and managing third-party distributors.
-* **Customer Operations:** Long-term support burdens for a consumer customer base and processing product returns.
-
-<details>
-<summary>Quote, Status:Pending</summary>
-
-<br>
-
-> I'm still waiting on sales to get back with me about turn-key 'white goods' development, I assume they are either busy, or not interested in supplying an unofficial/official quote. 
->  
-> *(I have both hope and patience)*
-
-</details>
-
-**The Pivot:** Rather than pursuing a commercial product path, the project's optimal future is **fully open source**. By anchoring the ecosystem around reliable, affordable, off-the-shelf hardware, `HUMID1-OS` eliminates hardware manufacturing risk while maximizing community accessibility, customization, and collaborative growth.
+Unlike consumer IoT devices dependent on proprietary third-party clouds:
+- **Dedicated Self-Hosting:** Device telemetry, dynamic shared attributes, and OTA deployment pipelines connect directly to **Humid1's self-hosted ThingsBoard Community Edition instance running on our custom cloud ([Humid1.com](https://www.humid1.com/))**.
+- **Data Privacy & Ownership:** Users own all environmental data with complete independence from third-party SaaS cloud platforms.
+- **Dynamic Configuration:** Temperature units (°F / °C / K), duty cycle sleep intervals (60s to 24h), sound toggles, and multi-stage humidor warning/critical alarm thresholds are dynamically synchronized from the server.
 
 ---
 
-## 6. Development Roadmap
+## 3. Comprehensive Documentation Suite
 
-* [x] **Phase 1: Core Infrastructure Setup**
-  * Configure and harden the ThingsBoard server environment.
-  * Establish domain routing and reverse proxy for `HUMID1-OS`.
-* [x] **Phase 2: Firmware Development (`HUMID1-OS`)**
-  * Write and optimize the firmware for the chosen ESP32-S3 e-Paper hardware platform.
-  * Implement deep-sleep power saving, `SHTC3` sensor polling, and local e-Paper rendering.
-  * Integrate secure Bluetooth provisioning and ThingsBoard telemetry transport.
-* [ ] **Phase 3: Testing & Validation**
-  * Bench-test sensor accuracy, battery longevity, and low-power states.
-  * Verify end-to-end data ingestion on the ThingsBoard server.
-* [ ] **Phase 4: OTA Pipeline & Deployment**
-  * Configure ThingsBoard OTA update mechanisms to ensure zero-touch maintenance post-initial flash.
-  * Deploy pilot devices and monitor long-term stability.
-* [ ] **Phase 5: Public Release Preparation**
-  * Refine documentation, onboarding guides, and open-source release artifacts for community use.
+- **[System Architecture Blueprint](Architectural_Outline.md)**: High-level system overview and lifecycle flow.
+- **[APP_01: System Architecture & Lifecycle](docs/architecture/APP_01_system_architecture.md)**: State machine, duty cycles, and H1OS boundary.
+- **[APP_02: Self-Hosted ThingsBoard & Cloud Integration](docs/architecture/APP_02_cloud_and_telemetry.md)**: Cloud schema, telemetry keys, shared attributes, and claiming protocol.
+- **[APP_03: BLE GATT Provisioning Specification](docs/architecture/APP_03_ble_provisioning.md)**: BLE onboarding protocol and Proof of Possession PIN.
+- **[APP_04: LVGL v9 UI Architecture & Screen Specifications](docs/architecture/APP_04_ui_and_screens.md)**: 1-bit monochrome UI layouts, humidor dashboard, and alert inversion mode.
+- **[APP_05: Audio Subsystem & Acoustic Event Chimes](docs/architecture/APP_05_audio_feedback.md)**: Acoustic feedback matrix and quiet hours.
+- **[APP_06: Over-The-Air (OTA) Firmware Deployment](docs/architecture/APP_06_ota_management.md)**: Dual-slot OTA update workflows and diagnostic rollback guards.
+- **[APP_07: OS API Feature Mandates](docs/architecture/APP_07_os_api_mandates.md)**: Formal register of upstream H1OS API requests, packaging fixes, and enhancements.
+- **[H1OS Middleware Reference](docs/h1os_reference.md)**: Hardware specifications and silicon errata.
 
 ---
 
-## 📄 License
+## 4. Hardware Platform Specifications
 
-Licenses: [MIT](LICENSE) (Code) | [CC BY 4.0](LICENSE-ASSETS) (Media Assets)  
+Standardized on the **Waveshare ESP32-S3 Touch-ePaper-1.54" V2 (SKU: 32298)**:
+- **SoC:** Espressif ESP32-S3-PICO-1-N8R8 (Xtensa® dual-core 32-bit LX7 @ up to 240 MHz, 8 MB Flash, 8 MB Octal PSRAM).
+- **Display:** 1.54-inch 200×200 pixel monochrome e-Paper display (SSD1681 driver, non-touch).
+- **Environmental Sensor:** Sensirion SHTC3 (I2C `0x70`) high-precision temperature & relative humidity sensor.
+- **Real-Time Clock:** NXP PCF85063A ultra-low-power calendar RTC (I2C `0x51`) with 32.768 kHz crystal backup.
+- **Audio:** Everest Semi ES8311 I2S codec + NS4168 Class-D amplifier driving an onboard speaker.
+- **Storage:** MicroSD card slot (1-bit SDMMC FATFS mode) + Onboard Flash partitions (`epd_frame`, `nvs`, `storage`).
+- **Power Architecture:** Discrete LDO battery power hold latch (`GPIO 17`), calibrated battery voltage ADC (`GPIO 4`), and physical button wake (`GPIO 18`).
 
-## 👥 Contributors
+---
 
-[![none](https://wsrv.nl/?url=github.com/Humiditron.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@Humiditron")](https://github.com/Humiditron/)
-[![none](https://wsrv.nl/?url=github.com/google-gemini.png&w=32&h=32&fit=cover&mask=circle&filt=greyscale "@google-gemini")](https://github.com/google-gemini/)
+## 5. Build & Development Instructions
 
-© 2026 **Humidyne-Labs**
+### Prerequisites
+- **ESP-IDF v6.1** installed in canonical path (`C:\esp\v6.1\esp-idf`).
+- Git for Windows.
 
+### Compilation
+1. Open PowerShell and activate the ESP-IDF v6.1 environment:
+   ```powershell
+   . C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1
+   ```
+2. Navigate to the `firmware/` directory:
+   ```powershell
+   cd firmware
+   ```
+3. Build the application (ESP-IDF Component Manager automatically resolves H1OS from Git):
+   ```powershell
+   idf.py build
+   ```
+4. Flash and monitor the hardware target:
+   ```powershell
+   idf.py -p COM3 flash monitor
+   ```
 
+---
+
+## 6. License
+
+This project is licensed under the [MIT License](LICENSE).  
+Brand assets and media in `assets/` are governed by [LICENSE-ASSETS](LICENSE-ASSETS).

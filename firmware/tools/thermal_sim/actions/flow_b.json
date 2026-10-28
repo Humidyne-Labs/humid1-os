@@ -1,0 +1,117 @@
+{
+  "name": "FLOW_B_UNATTENDED_V241",
+  "description": "Complete Unattended Flow B Wake (10-25-2026-08-09-pm.log Lines 0-174): 1,318ms ROM Bootloader & OS Init (45mA) + 483ms 240MHz LVGL Render (85mA) + 582ms Partial / 1,413ms Full OTP @ 80MHz DFS WAITI (41.5mA) + 160ms SPI Flash Commit & Sleep Latch (Total: 2,616ms / 491.2mJ Partial; 3,447ms / 618.8mJ Full OTP; 512.5mJ 1:6 Mean)",
+  "duration_ms": 2616,
+  "full_otp_total_duration_ms": 3447,
+  "epd_1_to_6_scaling": true,
+  "epd_partial_duration_ms": 582,
+  "epd_full_otp_duration_ms": 1413,
+  "activity": [
+    {
+      "part": "U9_ESP32S3",
+      "name": "ESP32-S3 (ROM Bootloader & FreeRTOS Init @ 160-240 MHz)",
+      "start_ms": 0,
+      "duration_ms": 1318,
+      "voltage_v": 3.3,
+      "current_ma": 42.0,
+      "power_mw": 138.6,
+      "notes": "Log Lines 1-94 (0..1318ms): ROM bootloader flash load + FreeRTOS kernel init before app_main (182.7 mJ)"
+    },
+    {
+      "part": "U9_ESP32S3",
+      "name": "ESP32-S3 (UI Restore & LVGL Render @ 240 MHz Turbo)",
+      "start_ms": 1318,
+      "duration_ms": 483,
+      "voltage_v": 3.3,
+      "current_ma": 66.2,
+      "power_mw": 218.46,
+      "notes": "Log Lines 101-156 (1318..1801ms): Flash restore (9ms) + LVGL v9 render (282ms) + SPI2 flush @ 240 MHz Turbo (105.5 mJ)"
+    },
+    {
+      "part": "U9_ESP32S3",
+      "name": "ESP32-S3 (Display BUSY Wait @ 80 MHz DFS WAITI)",
+      "start_ms": 1801,
+      "duration_ms": 582,
+      "full_otp_duration_ms": 1413,
+      "voltage_v": 3.3,
+      "current_ma": 33.1,
+      "power_mw": 109.23,
+      "notes": "Log Lines 158-159 (1801..2399ms): sub_display_wait_busy() blocks on vTaskDelay(10ms), dropping CPU to 80 MHz WAITI floor (63.6 mJ Partial / 154.3 mJ Full)"
+    },
+    {
+      "part": "U9_ESP32S3",
+      "name": "ESP32-S3 (SPI Flash 5KB Commit + Sleep Latch)",
+      "start_ms": 2383,
+      "full_otp_start_ms": 3214,
+      "duration_ms": 233,
+      "voltage_v": 3.3,
+      "current_ma": 48.0,
+      "power_mw": 158.4,
+      "notes": "Log Lines 163-174 (2383..2616ms): 88ms SPI NOR epd_frame commit @ 240 MHz + 72ms RTC slice arming & deep sleep entry (36.9 mJ)"
+    },
+    {
+      "part": "U7_MP1605",
+      "name": "MP1605 Buck Converter (Bootloader + 80 MHz WAITI + Commit)",
+      "start_ms": 0,
+      "duration_ms": 2616,
+      "full_otp_duration_ms": 3447,
+      "voltage_v": 3.7,
+      "current_ma": 4.8,
+      "power_mw": 17.76,
+      "notes": "MPS MP1605 conversion loss across 45mA boot & 41.5mA WAITI phases (46.5 mJ Partial / 61.2 mJ Full)"
+    },
+    {
+      "part": "U7_MP1605",
+      "name": "MP1605 Buck Converter (240 MHz Turbo Delta)",
+      "start_ms": 1318,
+      "duration_ms": 483,
+      "voltage_v": 3.7,
+      "current_ma": 3.7,
+      "power_mw": 13.69,
+      "notes": "Additional buck switching loss during 85 mA 240 MHz render burst (peak U7 P = 31.45 mW)"
+    },
+    {
+      "part": "L7_IND",
+      "name": "Buck Inductor 1.0uH (Bootloader + 80 MHz WAITI + Commit)",
+      "start_ms": 0,
+      "duration_ms": 2616,
+      "full_otp_duration_ms": 3447,
+      "voltage_v": 3.7,
+      "current_ma": 1.6,
+      "power_mw": 5.92,
+      "notes": "1uH inductor DCR & core loss across boot and WAITI phases"
+    },
+    {
+      "part": "L7_IND",
+      "name": "Buck Inductor 1.0uH (240 MHz Turbo Delta)",
+      "start_ms": 1318,
+      "duration_ms": 483,
+      "voltage_v": 3.7,
+      "current_ma": 2.2,
+      "power_mw": 8.14,
+      "notes": "Additional inductor DCR loss during 483ms 240 MHz render burst (peak L7 P = 14.06 mW)"
+    },
+    {
+      "part": "Q4_AO3401",
+      "name": "AO3401 High-Side VSYS PMOS",
+      "start_ms": 0,
+      "duration_ms": 2616,
+      "full_otp_duration_ms": 3447,
+      "voltage_v": 3.7,
+      "current_ma": 0.08,
+      "power_mw": 0.3,
+      "notes": "High-side PMOS R_DS(on) conduction loss during unattended wake"
+    },
+    {
+      "part": "L9_BOOST",
+      "name": "SSD1681 High-V Booster (L9 68uH)",
+      "start_ms": 1801,
+      "duration_ms": 582,
+      "full_otp_duration_ms": 1413,
+      "voltage_v": 3.3,
+      "current_ma": 8.0,
+      "power_mw": 26.4,
+      "notes": "Empirical 1:6 EPD Invariant (Log Lines 44, 70, 159): 582ms Partial Refresh (15.36 mJ) on Cycles 1-5; 1413ms Full OTP Refresh (37.30 mJ) on Cycle 6"
+    }
+  ]
+}

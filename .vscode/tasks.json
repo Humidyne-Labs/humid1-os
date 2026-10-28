@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Firmware: Build (ESP-IDF v6.1)",
+      "type": "shell",
+      "command": "powershell -ExecutionPolicy Bypass -NoExit -Command \". C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1; cd '${workspaceFolder}\\firmware'; idf.py build\"",
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Firmware: Clean Build Directory",
+      "type": "shell",
+      "command": "if (Test-Path firmware\\build) { Remove-Item -Recurse -Force firmware\\build }",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "shared"
+      }
+    }
+  ]
+}

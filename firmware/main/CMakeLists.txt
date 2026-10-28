@@ -1,0 +1,12 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "screens/screen_dashboard.c"
+    INCLUDE_DIRS
+        "."
+        "screens"
+    REQUIRES
+        h1os
+        freertos
+        log
+)
