@@ -1,56 +1,37 @@
-# APP_05: Acoustic Feedback, Attribute Gating & Power Isolation
+# APP_05: Acoustic Feedback & Unattended Silence Mandate
 
-* **Document ID:** `APP-ARCH-005` (Rev 2.0)
-* **Parent Blueprint:** [`Architectural_Outline.md`](../../Architectural_Outline.md)
-* **Normative Scope:** ES8311 + NS4168 Audio Pipeline Usage, Dual Attribute/Hardware Gates (`sound_enabled` & `has_sd_card`), and Unattended Deep-Sleep Silence Invariant
-
----
-
-## 1. Acoustic Feedback Architecture
-
-The Humid1 hardware integrates an **ES8311 low-power mono audio codec** (I2C address `0x18`, I2S digital audio bus) paired with an **NS4168 Class-D power amplifier** gated by active-low `PA_EN` (`GPIO 46`, via inverter). H1OS encapsulates the entire I2S DMA streaming and amplifier power-rail sequence behind a single non-blocking API:
-
-```c
-esp_err_t h1os_audio_play_Async(const char *filepath);
-```
-
-- **Storage Medium:** Uncompressed 16-bit PCM `.wav` assets reside on the FATFS microSD card mounted by H1OS at `/sdcard/`.
-- **Non-Blocking Execution:** `h1os_audio_play_Async()` spawns a dedicated background FreeRTOS worker inside H1OS that powers up `PA_EN`, streams the `.wav` file over I2S DMA, and automatically shuts down the NS4168 amplifier and ES8311 DAC upon completion. Application UI and network threads must **never** busy-wait on audio playback.
+> **Module Scope:** `firmware/main/main.c`, `firmware/main/app_config.h`
+> **Hardware Subsystem:** Everest Semi `ES8311` I2S Codec (`0x18`) + `NS4168` Class-D Amplifier (`PA_EN = GPIO 42` active LOW, `PA_CTRL = GPIO 46` active HIGH)
 
 ---
 
-## 2. Mandatory Three-Condition Playback Gate
+## 1. Layer 4 H1OS Audio API Contract
 
-Every acoustic event in `humid1-os` must pass a deterministic three-condition gate before invoking `h1os_audio_play_Async()`:
-
-```c
-bool app_audio_can_play(const app_state_t *state, bool is_rtc_wake) {
-    if (is_rtc_wake) {
-        return false; // Rule 1: Unattended periodic Flow B wakes are strictly silent
-    }
-    if (!state->attrs.sound_enabled) {
-        return false; // Rule 2: Server/NVS sound_enabled attribute must be true
-    }
-    if (!h1os_sdcard_is_mounted()) {
-        return false; // Rule 3: MicroSD card must be physically present and mounted
-    }
-    return true;
-}
-```
-
-1. **Condition 1 — Interactive Session Only (`!is_rtc_wake`):** Unattended periodic `Flow B` wakes occur every 15 minutes day and night. Enabling the Class-D amplifier during unattended wakes would disturb users and waste $\sim 45\text{--}120\,\text{mA}$ of battery current. Audio cues are strictly restricted to interactive sessions (`AWAKE`) and explicit user onboarding transitions.
-2. **Condition 2 — User Mute Preference (`sound_enabled`):** Synchronized from the ThingsBoard Shared Attribute `sound_enabled` and cached in NVS key `"sound_en"`.
-3. **Condition 3 — Media Availability (`h1os_sdcard_is_mounted()`):** Verified at boot and reported to ThingsBoard via the Client Attribute `"has_sd_card"` and `"audio_synced"`.
+`humid1-os` uses the public Layer 4 H1OS acoustic synthesis and PCM APIs declared in `<h1os/h1os.h>`:
+* `esp_err_t h1os_audio_play_tone(uint32_t freq_hz, uint32_t duration_ms);` — Asynchronous pure-tone synthesis queued to `h1os_audio_worker`.
+* `esp_err_t h1os_audio_play_chime(h1os_chime_type_t chime_type);` — Built-in multi-note acoustic patterns (`H1OS_CHIME_BOOT`, `H1OS_CHIME_SLEEP`, `H1OS_CHIME_SHUTDOWN`, `H1OS_CHIME_ALARM`).
+* `esp_err_t h1os_audio_play_raw(const int16_t *ptr, size_t len, size_t *bytes_written);` — Raw 16-bit signed mono 16 kHz PCM playback.
+* `esp_err_t h1os_set_volume(uint8_t volume_pct);` — Sets perceptual DAC volume (`0..100%`; `0%` mutes and places amplifier in standby).
 
 ---
 
-## 3. Canonical Audio Asset Map (`/sdcard/`)
+## 2. Unattended Wake Silence Invariant (`TST_005` / `TST_006` Thermal & Power Guard)
 
-| Event Trigger | Asset Path | Duration | Description |
-| :--- | :--- | :--- | :--- |
-| **Button Tap (`BOOT` / `POWER`)** | `/sdcard/ui_tap.wav` | $\le 60\,\text{ms}$ | Crisp tactile confirmation click on screen navigation. |
-| **Action Confirm (2s Hold)** | `/sdcard/ui_confirm.wav` | $\le 180\,\text{ms}$ | Dual-tone chime confirming theme toggle or sync request. |
-| **Onboarding / Claim Complete** | `/sdcard/claim_ok.wav` | $\le 450\,\text{ms}$ | Ascending triad played when Wi-Fi + customer claim succeed. |
-| **Server Warning Alarm** | `/sdcard/alarm_warn.wav` | $\le 600\,\text{ms}$ | Played once upon interactive wake if `alarm_state.severity == "WARNING"`. |
-| **Server Critical Alarm** | `/sdcard/alarm_crit.wav` | $\le 900\,\text{ms}$ | Played upon interactive wake if `alarm_state.severity == "CRITICAL"`. |
-| **Error / Auth Failure** | `/sdcard/err_buzz.wav` | $\le 300\,\text{ms}$ | Low double-tone played on BLE Wi-Fi authentication failure. |
+* **Rule:** Audio initialization and playback are **strictly prohibited** during unattended periodic wakes (`ctx->wake_state == H1OS_WAKE_STATE_RTC_FLOW_B`).
+* **Hardware Rationale:** During unattended RTC Flow B wakes, H1OS intentionally skips `sub_audio_init()` so the `ES8311` codec remains in its `< 1.0 µA` deep sleep state (`Reg 0x0D = 0xFC`), preventing both the `+4.4°C` codec thermal hotspot (`TST_005`) and unnecessary Class-D amplifier current draw.
+* **Application Gate:** Every call to `h1os_audio_play_tone()` or `h1os_audio_play_chime()` in `main.c` MUST be guarded by:
+  ```c
+  if (app->is_interactive_wake && app->cfg.sound_enabled) { ... }
+  ```
+
+---
+
+## 3. Acoustic Event Mapping
+
+| User / System Event | H1OS Layer 4 Call | Parameters |
+| :--- | :--- | :--- |
+| **Cold Boot Power-On** | Automatic via `lifecycle.presentation.chime_mask` | `H1OS_CHIME_BOOT` |
+| **Tactile Button Short Tap (`BOOT` / `POWER`)** | `h1os_audio_play_tone(1046, 50)` | `1046 Hz` (C6), `50 ms` |
+| **System Menu Long-Press Confirm** | `h1os_audio_play_tone(1318, 80)` | `1318 Hz` (E6), `80 ms` |
+| **Interactive Wake with Active Threshold Breach** | `h1os_audio_play_chime(H1OS_CHIME_ALARM)` | Built-in alarm pattern |
+| **Orderly Power-Down / Storage Shutdown** | Automatic via `lifecycle.presentation.chime_mask` | `H1OS_CHIME_SHUTDOWN` |

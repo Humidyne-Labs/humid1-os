@@ -31,6 +31,7 @@ Informal jargon, military slang, pop-culture metaphors, and ideological commenta
 | **fallback / fall back** | **default / recovery mode / safe state** | Fault handling logic. |
 | **doctrine / dogma** | **standard / architecture / principle / specification** | Non-technical, cultish, or ideological framing. |
 | **bones / the muscle / the vanity** | **contracts / subsystems / presentation layer** | Anatomical slang / informal construction metaphors. |
+| **cadence** | **interval / period / frequency / cycle timing** | Timer, sleep cycle, refresh rate, or polling timing. |
 
 ---
 

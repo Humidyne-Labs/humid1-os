@@ -1,15 +1,14 @@
 /**
  * @file app_state.h
- * @brief NVS persistence, RTC fast-cache management, and dynamic Flow A/B interval synchronization.
+ * @brief NVS persistence, H1OS telemetry normalization, flow period validation, and alarm logic.
  *
- * Implements the state persistence and factory reset rules specified in APP_01 and APP_03.
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
-#ifndef HUMID1_APP_STATE_H
-#define HUMID1_APP_STATE_H
+#ifndef APP_STATE_H
+#define APP_STATE_H
 
-#include <stdbool.h>
-#include <stdint.h>
 #include "esp_err.h"
 #include "app_types.h"
 
@@ -18,61 +17,47 @@ extern "C" {
 #endif
 
 /**
- * @brief Initialize application context, derive hardware UID (HUMID1_<MAC>),
- *        validate RTC Slow SRAM cache, and load persistent NVS settings.
- *
- * @param[out] ctx Pointer to the master application context.
- * @return ESP_OK on success, or an esp_err_t code on NVS failure.
+ * @brief Load persistent configuration from NVS (or initialize factory defaults).
  */
-esp_err_t app_state_init(app_context_t *ctx);
+esp_err_t app_state_load_config(app_context_t *ctx);
 
 /**
- * @brief Obtain a pointer to the persistent RTC Slow SRAM cache.
- *
- * @return Pointer to the RTC_DATA_ATTR cache structure.
+ * @brief Commit current configuration structure to NVS.
  */
-app_rtc_cache_t *app_state_get_rtc_cache(void);
+esp_err_t app_state_save_config(const app_context_t *ctx);
 
 /**
- * @brief Save modified configuration attributes to the "app_cfg" NVS namespace
- *        and invoke nvs_commit() (APP-PIT-05).
- *
- * @param[in] ctx Pointer to the master application context.
- * @return ESP_OK on success, or an esp_err_t code on NVS failure.
+ * @brief Validate Flow A and Flow B intervals against all 6 H1OS MANDATE-02 invariants.
  */
-esp_err_t app_state_save_nvs(const app_context_t *ctx);
+bool app_state_validate_flow_periods(uint32_t flow_a_sec, uint32_t flow_b_sec);
 
 /**
- * @brief Dynamically apply updated Flow A and Flow B wake intervals to both NVS
- *        and the active H1OS orchestrator state (MANDATE-02).
- *
- * @param[in,out] ctx        Pointer to the master application context.
- * @param[in]     flow_a_sec New Flow A headless sample period in seconds (15..3600).
- * @param[in]     flow_b_sec New Flow B cloud sync period in seconds (60..86400).
- * @return ESP_OK on success, ESP_ERR_INVALID_ARG if out of bounds.
+ * @brief Apply validated Flow A and Flow B intervals via Layer 4 h1os_set_flow_periods().
  */
 esp_err_t app_state_apply_flow_periods(app_context_t *ctx, uint32_t flow_a_sec, uint32_t flow_b_sec);
 
 /**
- * @brief Populate the unified telemetry frame in Kelvin from H1OS sensor and battery APIs.
- *
- * @param[in,out] ctx Pointer to the master application context.
- * @return ESP_OK on success.
+ * @brief Pull latest environmental & battery snapshot from H1OS via h1os_get_telemetry().
  */
 esp_err_t app_state_refresh_telemetry(app_context_t *ctx);
 
 /**
- * @brief Clear Wi-Fi credentials (and optionally ThingsBoard claim state) in NVS
- *        and reboot into BLE provisioning mode (APP_03 Section 5).
- *
- * @param[in,out] ctx           Pointer to the master application context.
- * @param[in]     factory_reset If true, also clears tb_token, claimed flag, and nickname.
- * @return ESP_OK prior to system restart.
+ * @brief Evaluate compound temperature and humidity thresholds with hysteresis.
  */
-esp_err_t app_state_reset_credentials(app_context_t *ctx, bool factory_reset);
+bool app_state_evaluate_alarms(app_context_t *ctx);
+
+/**
+ * @brief Format temperature value according to user's selected unit (C / F / K).
+ */
+float app_state_convert_temp(float temp_c, app_temp_unit_t unit, const char **out_unit_str);
+
+/**
+ * @brief Format vapor pressure value according to user's selected unit (hPa / kPa).
+ */
+float app_state_convert_vp(float vp_hpa, app_vp_unit_t unit, const char **out_unit_str);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* HUMID1_APP_STATE_H */
+#endif /* APP_STATE_H */

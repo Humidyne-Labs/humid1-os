@@ -1,17 +1,14 @@
 /**
  * @file cloud_tb.h
- * @brief ThingsBoard MQTTS Client: Auto-Provisioning, Customer Claiming, Server-Driven Telemetry,
- *        Shared Attribute Synchronization, and Server-Managed Alarm Reception.
+ * @brief ThingsBoard CE MQTTS client, zero-heap telemetry serializer, RPC handler, and OTA engine.
  *
- * Implements the protocol contracts specified in APP_02.
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
-#ifndef HUMID1_CLOUD_TB_H
-#define HUMID1_CLOUD_TB_H
+#ifndef CLOUD_TB_H
+#define CLOUD_TB_H
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #include "esp_err.h"
 #include "app_types.h"
 
@@ -20,49 +17,34 @@ extern "C" {
 #endif
 
 /**
- * @brief Execute Phase 1 ThingsBoard device auto-provisioning (/provision/request)
- *        using the Device Profile key/secret and store the assigned access token in NVS.
+ * @brief Execute bounded ThingsBoard MQTTS telemetry publish, attribute sync, and RPC check.
  *
- * @param[in,out] ctx        Pointer to the master application context.
- * @param[in]     timeout_ms Bounded MQTTS transaction timeout in milliseconds.
- * @return ESP_OK when tb_access_token is persisted in NVS.
+ * Runs on Core 0 inside the H1OS on_sync() lifecycle callback while Core 1 drives LVGL.
  */
-esp_err_t cloud_tb_auto_provision(app_context_t *ctx, uint32_t timeout_ms);
+esp_err_t cloud_tb_sync_burst(app_context_t *ctx);
 
 /**
- * @brief Generate a 6-character alphanumeric Claim PIN via hardware TRNG and publish
- *        the Phase 2 claiming initiation frame to v1/devices/me/claim (APP_02 Section 2.2).
- *
- * @param[in,out] ctx Pointer to the master application context.
- * @return ESP_OK on successful publish.
+ * @brief Format JSON telemetry frame into caller-supplied static buffer (zero heap allocation).
  */
-esp_err_t cloud_tb_begin_claiming(app_context_t *ctx);
+int cloud_tb_format_telemetry_json(const app_context_t *ctx, char *buf, size_t buf_size);
 
 /**
- * @brief Execute a full Flow B / Interactive MQTTS synchronization burst:
- *        1. Connect to mqtts://humid1.com:8883 with esp_crt_bundle_attach
- *        2. Publish CLIENT_SCOPE attributes and server-driven telemetry (Kelvin base unit)
- *        3. Request and apply SHARED_SCOPE attributes (intervals, theme, alarm_state, OTA flags)
- *
- * @param[in,out] ctx        Pointer to the master application context.
- * @param[in]     timeout_ms Bounded MQTTS transaction timeout in milliseconds.
- * @return ESP_OK on successful synchronization.
+ * @brief Format client-side attributes JSON into caller-supplied static buffer.
  */
-esp_err_t cloud_tb_sync_burst(app_context_t *ctx, uint32_t timeout_ms);
+int cloud_tb_format_client_attributes_json(const app_context_t *ctx, char *buf, size_t buf_size);
 
 /**
- * @brief Serialize the unified server-driven telemetry JSON document into a caller-supplied
- *        static buffer according to ctx->attrs.telemetry_schema_mask (zero heap allocation).
- *
- * @param[in]  ctx     Pointer to the master application context.
- * @param[out] out_buf Destination character buffer.
- * @param[in]  buf_len Capacity of out_buf in bytes.
- * @return ESP_OK on success, ESP_ERR_INVALID_SIZE if buffer is too small.
+ * @brief Dispatch an incoming ThingsBoard server-side RPC request JSON frame.
  */
-esp_err_t cloud_tb_format_telemetry_json(const app_context_t *ctx, char *out_buf, size_t buf_len);
+esp_err_t cloud_tb_handle_rpc_json(app_context_t *ctx, int request_id, const char *json_str);
+
+/**
+ * @brief Verify current OTA image health and cancel rollback if boot succeeded.
+ */
+esp_err_t cloud_tb_verify_ota_image(void);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* HUMID1_CLOUD_TB_H */
+#endif /* CLOUD_TB_H */

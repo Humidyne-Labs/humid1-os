@@ -1,56 +1,55 @@
-# Humid1-OS — Precision Humidor Telemetry Instrument Firmware
+# Humid1-OS (`v0.2.0-dev`) — Smart Humidor & Precision Environmental Appliance Firmware
 
-* **Target MCU:** ESP32-S3-WROOM-1-N16R8 (16 MB Quad Flash, 8 MB Octal PSRAM)
-* **Operating System Middleware:** [`H1OS` v2.4.4+](https://github.com/voidired/H1OS.git)
-* **Cloud Platform:** ThingsBoard Community Edition (`mqtts://humid1.com:8883`)
-* **Display Engine:** LVGL v9 1-Bit Monochrome ($200 \times 200$ Waveshare 1.54" SSD1681 e-Paper)
-* **Governance Standard:** `APP-STD-001` / `H1OS-STD-001` ("Documentation is Law")
+[![ESP-IDF](https://img.shields.io/badge/ESP--IDF-v6.1-blue.svg)](https://idf.espressif.com/)
+[![H1OS](https://img.shields.io/badge/H1OS-%3E%3Dv2.4.9--dev-brightgreen.svg)](https://github.com/Humidyne-Labs/H1OS)
+[![Target](https://img.shields.io/badge/Hardware-Waveshare%20ESP32--S3--ePaper--1.54%20V2-green.svg)](https://www.waveshare.com)
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
----
-
-## 1. Overview
-
-**Humid1-OS** is the Layer 4 embedded application firmware for the **Humid1** battery-powered environmental telemetry instrument. Built on the **H1OS** operating system middleware, it implements:
-
-1. **Encrypted First-Boot BLE Wi-Fi Provisioning (`APP_03`):** Uses `protocomm_ble` Security 1 with a simultaneous on-screen QR code, 8-digit hardware TRNG Proof-of-Possession PIN, and deterministic `HUMID1_<MAC>` device identifier. Once Wi-Fi connects, the BLE stack is completely deinitialized.
-2. **Two-Phase ThingsBoard Registration & Persistent Claiming (`APP_02`):** Automatically provisions its device entity via `/provision/request` to obtain a permanent access token (`tb_token`), then guides the customer through `v1/devices/me/claim` with an on-screen 6-character Claim PIN and 180-second countdown timer.
-3. **Server-Driven Kelvin Telemetry & Dynamic Wake Cadence (`APP_01`, `APP_02`):** Publishes server-specified telemetry in **Kelvin ($\text{K}$)** (`rh`, `temp`, `battery`, `rssi`) and synchronizes dynamic **Flow A** (headless sensor sample) and **Flow B** (cloud sync + e-Paper refresh) wake intervals from ThingsBoard Shared Attributes.
-4. **Three-Screen Two-Button User Interface (`APP_04`):** Features an explicit `[ AWAKE ]` vs. `ZZZ SLEEP` mode badge, a hardcoded 30-second interactive timeout, and three user screens (**Main Dashboard**, **Diagnostics & Tri-Node Metrology**, and **System States, Alarms & Actions**) plus modal screens for BLE Provisioning, Claiming, and Dual-Slot OTA updates (`APP_06`).
+**Humid1-OS** is the Layer 4 user application firmware for the **Humidyne Labs** smart humidor and precision environmental monitoring appliance. It runs on the **Waveshare ESP32-S3 ePaper 1.54" V2** (`ESP32-S3-PICO-1-N8R8`, 8 MB QIO Flash, 8 MB Octal PSRAM, Non-Touch SSD1681 200×200 1-Bit e-Paper) and consumes [**H1OS (`>= v2.4.9-dev`)**](https://github.com/Humidyne-Labs/H1OS) as an external ESP-IDF middleware component.
 
 ---
 
-## 2. Repository Structure
+## 1. Key Architectural Capabilities
 
-| Path | Description |
-| :--- | :--- |
-| [`Architectural_Outline.md`](Architectural_Outline.md) | Master architectural blueprint, system lifecycle diagram, and specification index. |
-| [`AGENTS.md`](AGENTS.md) | Mandatory workflow, coding standards, and audit rules for AI coding agents. |
-| [`CHANGELOG.md`](CHANGELOG.md) | Semantic Versioning 2.0.0 release and modification log. |
-| [`docs/h1os_reference.md`](docs/h1os_reference.md) | Complete Layer 1–4 H1OS middleware API and hardware pinout reference. |
-| [`docs/architecture/APP_01..08`](docs/architecture/) | Authoritative subsystem specifications (`APP_01` through `APP_08`). |
-| [`docs/audits/APP_AUDIT_01_infrastructure_and_api_review.md`](docs/audits/APP_AUDIT_01_infrastructure_and_api_review.md) | Full-stack audit of ThingsBoard Rule Chains, Web Dashboard, and H1OS API mandates. |
-| [`firmware/`](firmware/) | Clean-state ESP-IDF v5.4.1 project with modular C/H headers and skeleton implementations. |
-| [`.agents/`](.agents/) | Agent rules (`.agents/rules/*.md`) and domain skills (`.agents/skills/*/SKILL.md`). |
+* **Declarative Dual-Core H1OS Lifecycle (`MANDATE-04`):**
+  * **Flow A (Headless Sensor Burst):** `~18.5 ms` @ 80 MHz in H1OS `RTC_IRAM_ATTR` wake stub (`orch_wake_stub.c`), sampling SHTC3 (`0x70`) and MCU die TSENS with zero PCB thermal self-heating.
+  * **Flow B (Parallel Display & Cloud Sync):** Core 1 renders the 200×200 1-bit LVGL v9 interface and drives the SSD1681 e-Paper display while Core 0 executes `app_on_sync()` (Wi-Fi STA burst, SNTP PCF85063A RTC sync, ThingsBoard CE MQTTS telemetry publish, shared attribute sync, and server RPC dispatch) in parallel.
+* **4 Monochrome 1-Bit LVGL v9 Screens (`H1OS_FONT_14..32`):**
+  * **Screen 1 (`screen_dashboard.c`):** Hero relative humidity (`H1OS_FONT_32`), settled temperature (`°C`/`°F`/`K`, `H1OS_FONT_24`), dew point, vapor pressure (`hPa`/`kPa`), compound alarm pill, and empirical battery autonomy projection.
+  * **Screen 2 (`screen_diagnostics.c`):** Absolute humidity (`g/m³`), actual vs. saturation vapor pressure, Tri-Node temperature verification (`SHTC3`, `MCU Die`, `EPD Glass`, `ΔT`), battery voltage/current, and wake/sample counters.
+  * **Screen 3 (`screen_system.c`):** Interactive 2-button system menu for Light/Dark polarity toggling (`h1os_lvgl_request_full_refresh()`), audio mute, cloud pairing reset, and clean-white safe storage power-off (`h1os_shutdown_for_storage()`).
+  * **Screen 4 (`screen_onboarding.c`):** Out-of-box `123×123 px` integer-scaled Version 6 QR code and BLE GATT / ThingsBoard claiming screen.
+* **Canonical 8 MB Dual-Slot OTA Layout (`firmware/partitions.csv`):**
+  * Dual `3.0 MB` application slots (`ota_0`, `ota_1`), `1.86 MB` FATFS `storage`, and `16 KB` `epd_frame` persistent shadow framebuffer with `>= 25%` SoC (`3650 mV`) battery safety gating and automatic rollback protection.
 
 ---
 
-## 3. Quickstart & Build Instructions
+## 2. Authoritative Documentation & Agent Governance
 
-### 3.1 Prerequisites
-- **ESP-IDF v5.4.1** installed and exported in your shell environment.
-- Python 3.10+ with `Pillow` installed for 1-BPP LVGL font generation (`generate_1bpp_fonts.py`).
+* **[Master Architectural Outline](Architectural_Outline.md)**
+* **[H1OS (`v2.4.9-dev`) Public API Reference](docs/h1os_reference.md)**
+* **[Master Agent Specification & Anti-Drift Guardrails](AGENTS.md)**
+* **Modular Architecture Suite (`docs/architecture/`):**
+  * [`APP_01_system_architecture.md`](docs/architecture/APP_01_system_architecture.md) — System layering, Dual-Core lifecycle, Flow A/B invariants & NVS schema
+  * [`APP_02_cloud_and_telemetry.md`](docs/architecture/APP_02_cloud_and_telemetry.md) — ThingsBoard CE MQTTS telemetry, attributes & RPC dictionary
+  * [`APP_03_onboarding_and_claiming.md`](docs/architecture/APP_03_onboarding_and_claiming.md) — BLE provisioning, `123×123 px` QR code & device claiming
+  * [`APP_04_ui_and_screens.md`](docs/architecture/APP_04_ui_and_screens.md) — 200×200 1-bit UI screens, typography (`>= 14px`) & 2-button navigation
+  * [`APP_05_audio_feedback.md`](docs/architecture/APP_05_audio_feedback.md) — Layer 4 acoustic tones/chimes & unattended Flow B silence mandate
+  * [`APP_06_ota_management.md`](docs/architecture/APP_06_ota_management.md) — 8 MB Dual-Slot OTA state machine & battery safety gate
+  * [`APP_07_os_api_mandates.md`](docs/architecture/APP_07_os_api_mandates.md) — H1OS cross-repository API mandate verification ledger (`100% RESOLVED`)
+  * [`APP_08_audit_and_doc_governance.md`](docs/architecture/APP_08_audit_and_doc_governance.md) — Pre-flight verification gates & IEEE/embedded lexicon rules
 
-### 3.2 Building & Flashing
+---
+
+## 3. Build & Pre-Flight Verification (`ESP-IDF >= v6.1.0`)
+
 ```bash
+# 1. Run pre-flight lexicon & 1-BPP viewport string width gates (from repo root)
+python tools/agent/sanitize.py --check
+python tools/agent/check_string_width.py --audit-screens
+
+# 2. Build development or production firmware (inside firmware/)
 cd firmware
-idf.py set-target esp32s3
-idf.py build
-idf.py -p /dev/ttyACM0 flash monitor
-```
-
-### 3.3 Running Automated Pre-Flight Verification Gates
-Before committing any changes, run the repository verification suite from the root directory:
-```bash
-python3 firmware/tools/agent/sanitize.py
-python3 firmware/tools/agent/check_string_width.py
+idf.py -B build_dev --preset dev build
+idf.py -B build_prod --preset prod build
 ```

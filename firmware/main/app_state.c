@@ -1,151 +1,189 @@
 /**
  * @file app_state.c
- * @brief Skeleton implementation of NVS persistence, RTC Slow SRAM cache, and dynamic Flow A/B sync.
+ * @brief Pure Layer 4 implementation of NVS persistence, telemetry normalization, and alarm logic.
+ *
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
 #include "app_state.h"
 #include <stdio.h>
 #include <string.h>
-#include "esp_attr.h"
 #include "esp_log.h"
 #include "esp_mac.h"
-#include "esp_system.h"
-#include "nvs.h"
-#include "nvs_flash.h"
-#include "h1os/h1os.h"
-#include "h1os/orch_state.h"
 
 static const char *TAG = "app_state";
 
-#define APP_RTC_CACHE_MAGIC (0x48314150UL) /* "H1AP" */
-
-/**
- * @brief Persistent RTC Slow SRAM state retained across deep sleep (PIT-05-A).
- */
-static RTC_DATA_ATTR app_rtc_cache_t s_rtc_cache;
-
-app_rtc_cache_t *app_state_get_rtc_cache(void)
+static void populate_factory_defaults(app_nvs_config_t *cfg)
 {
-    return &s_rtc_cache;
+    memset(cfg, 0, sizeof(*cfg));
+    cfg->provisioned   = false;
+    cfg->claimed       = false;
+    strncpy(cfg->nickname, APP_DEFAULT_NICKNAME, sizeof(cfg->nickname) - 1);
+    cfg->flow_a_sec    = APP_DEFAULT_FLOW_A_SEC;
+    cfg->flow_b_sec    = APP_DEFAULT_FLOW_B_SEC;
+    cfg->temp_unit     = APP_TEMP_UNIT_CELSIUS;
+    cfg->vp_unit       = APP_VP_UNIT_HPA;
+    cfg->theme         = APP_THEME_LIGHT;
+    cfg->sound_enabled = true;
+    cfg->volume_pct    = APP_AUDIO_DEFAULT_VOLUME_PCT;
+    cfg->alert_mode         = APP_ALERT_MODE_EITHER_OR;
+    cfg->batch_telemetry_en = false; /* Default: Wake -> Send -> Sleep */
+    cfg->batch_flow_b_ratio = 4U;    /* Optional batch mode: push every 4th Flow B */
+    cfg->temp_high_c   = APP_DEFAULT_TEMP_HIGH_C;
+    cfg->temp_low_c    = APP_DEFAULT_TEMP_LOW_C;
+    cfg->rh_high_pct   = APP_DEFAULT_RH_HIGH_PCT;
+    cfg->rh_low_pct    = APP_DEFAULT_RH_LOW_PCT;
+
+    uint8_t mac[6] = {0};
+    (void)esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    snprintf(cfg->claim_secret, sizeof(cfg->claim_secret),
+             "H1-%02X%02X%02X%02X", mac[2], mac[3], mac[4], mac[5]);
 }
 
-esp_err_t app_state_init(app_context_t *ctx)
+bool app_state_validate_flow_periods(uint32_t flow_a_sec, uint32_t flow_b_sec)
+{
+    if (flow_a_sec < APP_MIN_FLOW_A_SEC || flow_a_sec > APP_MAX_FLOW_A_SEC) {
+        return false;
+    }
+    if (flow_b_sec < APP_MIN_FLOW_B_SEC || flow_b_sec > APP_MAX_FLOW_B_SEC) {
+        return false;
+    }
+    if (flow_a_sec > 255U && (flow_a_sec % 60U != 0U)) {
+        return false;
+    }
+    if (flow_b_sec <= flow_a_sec) {
+        return false;
+    }
+    uint32_t remainder = flow_b_sec % flow_a_sec;
+    if (remainder > 0U && remainder < H1OS_FLOW_REMAINDER_MIN_SEC) {
+        return false;
+    }
+    if (remainder > 255U && (remainder % 60U != 0U)) {
+        return false;
+    }
+    uint32_t overflow = (flow_b_sec / flow_a_sec) + (remainder > 0U ? 1U : 0U);
+    return (overflow >= 2U);
+}
+
+esp_err_t app_state_load_config(app_context_t *ctx)
 {
     if (ctx == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    memset(ctx, 0, sizeof(app_context_t));
+    populate_factory_defaults(&ctx->cfg);
 
-    /* 1. Derive deterministic hardware UID: HUMID1_<MAC_LAST_3_BYTES> */
-    uint8_t mac[6] = {0};
-    esp_err_t err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "esp_read_mac failed (0x%x), using placeholder UID", (unsigned int)err);
+    uint8_t u8_val = 0;
+    uint32_t u32_val = 0;
+    int32_t i32_val = 0;
+    size_t len = 0;
+
+    if (h1os_nvs_get_u8(APP_NVS_KEY_PROVISIONED, &u8_val) == ESP_OK) {
+        ctx->cfg.provisioned = (u8_val != 0);
     }
-    snprintf(ctx->attrs.device_uid, sizeof(ctx->attrs.device_uid),
-             "%s%02X%02X%02X", APP_DEVICE_UID_PREFIX, mac[3], mac[4], mac[5]);
-
-    /* 2. Initialize RTC Slow SRAM cache on cold power-on reset */
-    if (s_rtc_cache.magic != APP_RTC_CACHE_MAGIC) {
-        memset(&s_rtc_cache, 0, sizeof(app_rtc_cache_t));
-        s_rtc_cache.magic = APP_RTC_CACHE_MAGIC;
-        s_rtc_cache.thresholds.rh_low_crit        = 60.0f;
-        s_rtc_cache.thresholds.rh_low_warn        = 62.0f;
-        s_rtc_cache.thresholds.rh_high_warn       = 72.0f;
-        s_rtc_cache.thresholds.rh_high_crit       = 75.0f;
-        s_rtc_cache.thresholds.temp_low_crit_k    = 288.71f;
-        s_rtc_cache.thresholds.temp_low_warn_k    = 290.93f;
-        s_rtc_cache.thresholds.temp_high_warn_k   = 295.37f;
-        s_rtc_cache.thresholds.temp_high_crit_k   = 297.59f;
-        s_rtc_cache.thresholds.batt_low_crit_pct  = 10.0f;
-        s_rtc_cache.thresholds.batt_low_warn_pct  = 20.0f;
-        s_rtc_cache.thresholds.rh_hysteresis      = 1.0f;
-        s_rtc_cache.thresholds.temp_hysteresis_k  = 0.3f;
-        s_rtc_cache.thresholds.batt_hysteresis_pct = 2.0f;
+    if (h1os_nvs_get_u8(APP_NVS_KEY_CLAIMED, &u8_val) == ESP_OK) {
+        ctx->cfg.claimed = (u8_val != 0);
     }
 
-    /* 3. Set baseline defaults prior to NVS load */
-    ctx->attrs.flow_a_period_sec     = APP_DEFAULT_FLOW_A_SEC;
-    ctx->attrs.flow_b_period_sec     = APP_DEFAULT_FLOW_B_SEC;
-    ctx->attrs.telemetry_schema_mask = (uint32_t)APP_TELE_MASK_DEFAULT;
-    ctx->attrs.temp_unit             = APP_TEMP_UNIT_FAHRENHEIT;
-    ctx->attrs.sound_enabled         = true;
-    ctx->attrs.auto_update_enabled   = true;
+    len = sizeof(ctx->cfg.tb_token);
+    (void)h1os_nvs_get_str(APP_NVS_KEY_TB_TOKEN, ctx->cfg.tb_token, &len);
 
-    /* 4. Load persisted configuration from NVS namespace "app_cfg" */
-    nvs_handle_t nvs = 0;
-    err = nvs_open(APP_NVS_NAMESPACE, NVS_READONLY, &nvs);
-    if (err == ESP_OK) {
-        uint8_t u8_val = 0;
-        if (nvs_get_u8(nvs, APP_NVS_KEY_WIFI_PROV, &u8_val) == ESP_OK) {
-            ctx->attrs.wifi_provisioned = (u8_val != 0U);
-        }
-        if (nvs_get_u8(nvs, APP_NVS_KEY_CLAIMED, &u8_val) == ESP_OK) {
-            ctx->attrs.device_claimed = (u8_val != 0U);
-        }
-        if (nvs_get_u8(nvs, APP_NVS_KEY_TEMP_UNIT, &u8_val) == ESP_OK && u8_val <= 2U) {
-            ctx->attrs.temp_unit = (app_temp_unit_t)u8_val;
-        }
-        if (nvs_get_u8(nvs, APP_NVS_KEY_THEME_DARK, &u8_val) == ESP_OK) {
-            ctx->attrs.theme_dark = (u8_val != 0U);
-        }
-        if (nvs_get_u8(nvs, APP_NVS_KEY_SOUND_EN, &u8_val) == ESP_OK) {
-            ctx->attrs.sound_enabled = (u8_val != 0U);
-        }
-        if (nvs_get_u8(nvs, APP_NVS_KEY_AUTO_OTA, &u8_val) == ESP_OK) {
-            ctx->attrs.auto_update_enabled = (u8_val != 0U);
-        }
-        (void)nvs_get_u32(nvs, APP_NVS_KEY_FLOW_A_SEC, &ctx->attrs.flow_a_period_sec);
-        (void)nvs_get_u32(nvs, APP_NVS_KEY_FLOW_B_SEC, &ctx->attrs.flow_b_period_sec);
+    len = sizeof(ctx->cfg.claim_secret);
+    (void)h1os_nvs_get_str(APP_NVS_KEY_CLAIM_SECRET, ctx->cfg.claim_secret, &len);
 
-        size_t len = sizeof(ctx->attrs.tb_access_token);
-        (void)nvs_get_str(nvs, APP_NVS_KEY_TB_TOKEN, ctx->attrs.tb_access_token, &len);
+    len = sizeof(ctx->cfg.nickname);
+    (void)h1os_nvs_get_str(APP_NVS_KEY_NICKNAME, ctx->cfg.nickname, &len);
 
-        len = sizeof(ctx->attrs.device_nickname);
-        (void)nvs_get_str(nvs, APP_NVS_KEY_NICKNAME, ctx->attrs.device_nickname, &len);
-
-        nvs_close(nvs);
-    } else {
-        ESP_LOGI(TAG, "NVS namespace '%s' not yet created (first boot)", APP_NVS_NAMESPACE);
+    if (h1os_nvs_get_u32(APP_NVS_KEY_FLOW_A_SEC, &u32_val) == ESP_OK) {
+        ctx->cfg.flow_a_sec = u32_val;
+    }
+    if (h1os_nvs_get_u32(APP_NVS_KEY_FLOW_B_SEC, &u32_val) == ESP_OK) {
+        ctx->cfg.flow_b_sec = u32_val;
+    }
+    if (!app_state_validate_flow_periods(ctx->cfg.flow_a_sec, ctx->cfg.flow_b_sec)) {
+        ESP_LOGW(TAG, "Stored flow intervals (%lu s / %lu s) violate H1OS invariants; restoring defaults (%u s / %u s)",
+                 (unsigned long)ctx->cfg.flow_a_sec, (unsigned long)ctx->cfg.flow_b_sec,
+                 APP_DEFAULT_FLOW_A_SEC, APP_DEFAULT_FLOW_B_SEC);
+        ctx->cfg.flow_a_sec = APP_DEFAULT_FLOW_A_SEC;
+        ctx->cfg.flow_b_sec = APP_DEFAULT_FLOW_B_SEC;
     }
 
-    ESP_LOGI(TAG, "Initialized UID=%s prov=%u claimed=%u FlowA=%lus FlowB=%lus",
-             ctx->attrs.device_uid,
-             (unsigned int)ctx->attrs.wifi_provisioned,
-             (unsigned int)ctx->attrs.device_claimed,
-             (unsigned long)ctx->attrs.flow_a_period_sec,
-             (unsigned long)ctx->attrs.flow_b_period_sec);
+    if (h1os_nvs_get_u8(APP_NVS_KEY_UNIT_TEMP, &u8_val) == ESP_OK && u8_val <= APP_TEMP_UNIT_KELVIN) {
+        ctx->cfg.temp_unit = (app_temp_unit_t)u8_val;
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_UNIT_VP, &u8_val) == ESP_OK && u8_val <= APP_VP_UNIT_KPA) {
+        ctx->cfg.vp_unit = (app_vp_unit_t)u8_val;
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_THEME, &u8_val) == ESP_OK && u8_val <= APP_THEME_DARK) {
+        ctx->cfg.theme = (app_theme_t)u8_val;
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_SOUND_EN, &u8_val) == ESP_OK) {
+        ctx->cfg.sound_enabled = (u8_val != 0);
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_VOLUME_PCT, &u8_val) == ESP_OK && u8_val <= 100U) {
+        ctx->cfg.volume_pct = u8_val;
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_ALERT_MODE, &u8_val) == ESP_OK && u8_val <= APP_ALERT_MODE_BOTH_REQUIRED) {
+        ctx->cfg.alert_mode = (app_alert_mode_t)u8_val;
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_BATCH_EN, &u8_val) == ESP_OK) {
+        ctx->cfg.batch_telemetry_en = (u8_val != 0);
+    }
+    if (h1os_nvs_get_u8(APP_NVS_KEY_BATCH_RATIO, &u8_val) == ESP_OK && u8_val >= 1U && u8_val <= 16U) {
+        ctx->cfg.batch_flow_b_ratio = u8_val;
+    }
+
+    /* Centi-unit fixed-point storage for thresholds in NVS */
+    if (h1os_nvs_get_i32(APP_NVS_KEY_TH_TEMP_HI, &i32_val) == ESP_OK) {
+        ctx->cfg.temp_high_c = (float)i32_val / 100.0f;
+    }
+    if (h1os_nvs_get_i32(APP_NVS_KEY_TH_TEMP_LO, &i32_val) == ESP_OK) {
+        ctx->cfg.temp_low_c = (float)i32_val / 100.0f;
+    }
+    if (h1os_nvs_get_i32(APP_NVS_KEY_TH_RH_HI, &i32_val) == ESP_OK) {
+        ctx->cfg.rh_high_pct = (float)i32_val / 100.0f;
+    }
+    if (h1os_nvs_get_i32(APP_NVS_KEY_TH_RH_LO, &i32_val) == ESP_OK) {
+        ctx->cfg.rh_low_pct = (float)i32_val / 100.0f;
+    }
+
+    /* Synchronize RH alert bounds with H1OS Layer 4 API */
+    (void)h1os_set_rh_alert_bounds(ctx->cfg.rh_low_pct, ctx->cfg.rh_high_pct);
+
+    ESP_LOGI(TAG, "Loaded NVS config: nick='%s', prov=%d, claimed=%d, FlowA=%lus, FlowB=%lus",
+             ctx->cfg.nickname, ctx->cfg.provisioned, ctx->cfg.claimed,
+             (unsigned long)ctx->cfg.flow_a_sec, (unsigned long)ctx->cfg.flow_b_sec);
     return ESP_OK;
 }
 
-esp_err_t app_state_save_nvs(const app_context_t *ctx)
+esp_err_t app_state_save_config(const app_context_t *ctx)
 {
     if (ctx == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    nvs_handle_t nvs = 0;
-    esp_err_t err = nvs_open(APP_NVS_NAMESPACE, NVS_READWRITE, &nvs);
-    if (err != ESP_OK) {
-        return err;
-    }
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_PROVISIONED, ctx->cfg.provisioned ? 1U : 0U);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_CLAIMED, ctx->cfg.claimed ? 1U : 0U);
+    (void)h1os_nvs_set_str(APP_NVS_KEY_TB_TOKEN, ctx->cfg.tb_token);
+    (void)h1os_nvs_set_str(APP_NVS_KEY_CLAIM_SECRET, ctx->cfg.claim_secret);
+    (void)h1os_nvs_set_str(APP_NVS_KEY_NICKNAME, ctx->cfg.nickname);
+    (void)h1os_nvs_set_u32(APP_NVS_KEY_FLOW_A_SEC, ctx->cfg.flow_a_sec);
+    (void)h1os_nvs_set_u32(APP_NVS_KEY_FLOW_B_SEC, ctx->cfg.flow_b_sec);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_UNIT_TEMP, (uint8_t)ctx->cfg.temp_unit);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_UNIT_VP, (uint8_t)ctx->cfg.vp_unit);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_THEME, (uint8_t)ctx->cfg.theme);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_SOUND_EN, ctx->cfg.sound_enabled ? 1U : 0U);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_VOLUME_PCT, ctx->cfg.volume_pct);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_ALERT_MODE, (uint8_t)ctx->cfg.alert_mode);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_BATCH_EN, ctx->cfg.batch_telemetry_en ? 1U : 0U);
+    (void)h1os_nvs_set_u8(APP_NVS_KEY_BATCH_RATIO, ctx->cfg.batch_flow_b_ratio);
+    (void)h1os_nvs_set_i32(APP_NVS_KEY_TH_TEMP_HI, (int32_t)(ctx->cfg.temp_high_c * 100.0f));
+    (void)h1os_nvs_set_i32(APP_NVS_KEY_TH_TEMP_LO, (int32_t)(ctx->cfg.temp_low_c * 100.0f));
+    (void)h1os_nvs_set_i32(APP_NVS_KEY_TH_RH_HI, (int32_t)(ctx->cfg.rh_high_pct * 100.0f));
+    (void)h1os_nvs_set_i32(APP_NVS_KEY_TH_RH_LO, (int32_t)(ctx->cfg.rh_low_pct * 100.0f));
 
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_WIFI_PROV, ctx->attrs.wifi_provisioned ? 1U : 0U);
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_CLAIMED, ctx->attrs.device_claimed ? 1U : 0U);
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_TEMP_UNIT, (uint8_t)ctx->attrs.temp_unit);
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_THEME_DARK, ctx->attrs.theme_dark ? 1U : 0U);
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_SOUND_EN, ctx->attrs.sound_enabled ? 1U : 0U);
-    (void)nvs_set_u8(nvs, APP_NVS_KEY_AUTO_OTA, ctx->attrs.auto_update_enabled ? 1U : 0U);
-    (void)nvs_set_u32(nvs, APP_NVS_KEY_FLOW_A_SEC, ctx->attrs.flow_a_period_sec);
-    (void)nvs_set_u32(nvs, APP_NVS_KEY_FLOW_B_SEC, ctx->attrs.flow_b_period_sec);
-    (void)nvs_set_str(nvs, APP_NVS_KEY_TB_TOKEN, ctx->attrs.tb_access_token);
-    (void)nvs_set_str(nvs, APP_NVS_KEY_NICKNAME, ctx->attrs.device_nickname);
-
-    /* Mandatory commit prior to handle close or sleep entry (PIT-05-D) */
-    err = nvs_commit(nvs);
-    nvs_close(nvs);
-    return err;
+    return ESP_OK;
 }
 
 esp_err_t app_state_apply_flow_periods(app_context_t *ctx, uint32_t flow_a_sec, uint32_t flow_b_sec)
@@ -153,23 +191,25 @@ esp_err_t app_state_apply_flow_periods(app_context_t *ctx, uint32_t flow_a_sec, 
     if (ctx == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (flow_a_sec < APP_MIN_FLOW_A_SEC || flow_a_sec > APP_MAX_FLOW_A_SEC ||
-        flow_b_sec < APP_MIN_FLOW_B_SEC || flow_b_sec > APP_MAX_FLOW_B_SEC ||
-        flow_b_sec < flow_a_sec) {
+
+    if (!app_state_validate_flow_periods(flow_a_sec, flow_b_sec)) {
+        ESP_LOGE(TAG, "Rejected invalid flow intervals: Flow A=%lu s, Flow B=%lu s",
+                 (unsigned long)flow_a_sec, (unsigned long)flow_b_sec);
         return ESP_ERR_INVALID_ARG;
     }
 
-    ctx->attrs.flow_a_period_sec = flow_a_sec;
-    ctx->attrs.flow_b_period_sec = flow_b_sec;
-
-    /* MANDATE-02 shim: Synchronize active H1OS orchestrator state immediately */
-    h1os_rtc_state_t *orch = orch_state_get();
-    if (orch != NULL) {
-        orch->sample_interval_sec = (uint16_t)flow_a_sec;
-        orch->flow_b_period_sec   = flow_b_sec;
+    esp_err_t err = h1os_set_flow_periods(flow_a_sec, flow_b_sec);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "h1os_set_flow_periods(%lu, %lu) failed: %s",
+                 (unsigned long)flow_a_sec, (unsigned long)flow_b_sec, esp_err_to_name(err));
+        return err;
     }
 
-    return app_state_save_nvs(ctx);
+    ctx->cfg.flow_a_sec = flow_a_sec;
+    ctx->cfg.flow_b_sec = flow_b_sec;
+    ctx->telemetry.flow_a_period_sec = flow_a_sec;
+    ctx->telemetry.flow_b_period_sec = flow_b_sec;
+    return app_state_save_config(ctx);
 }
 
 esp_err_t app_state_refresh_telemetry(app_context_t *ctx)
@@ -179,44 +219,129 @@ esp_err_t app_state_refresh_telemetry(app_context_t *ctx)
     }
 
     h1os_telemetry_t raw = {0};
-    h1os_get_telemetry(&raw);
+    esp_err_t err = h1os_get_telemetry(&raw);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "h1os_get_telemetry returned %s; retaining last valid snapshot", esp_err_to_name(err));
+    }
 
-    ctx->telemetry.rh_pct           = raw.ambient_rh_pct;
-    ctx->telemetry.temp_k           = app_celsius_to_kelvin(raw.ambient_temp_c);
-    ctx->telemetry.dew_point_k      = app_celsius_to_kelvin(raw.dew_point_c);
-    ctx->telemetry.shtc3_raw_k      = app_celsius_to_kelvin(raw.shtc3_raw_temp_c);
-    ctx->telemetry.mcu_die_k        = app_celsius_to_kelvin(raw.mcu_die_temp_c);
-    ctx->telemetry.epd_glass_k      = app_celsius_to_kelvin(raw.epd_glass_temp_c);
-    ctx->telemetry.vapor_press_hpa  = raw.vapor_pressure_hpa;
-    ctx->telemetry.sat_vp_hpa       = raw.sat_vapor_pressure_hpa;
-    ctx->telemetry.abs_humidity_gm3 = raw.absolute_humidity_gm3;
-    ctx->telemetry.autonomy_days    = raw.battery.autonomy_days;
-    ctx->telemetry.avg_current_ma   = raw.battery.avg_current_ma;
-    ctx->telemetry.vbat_mv          = raw.battery.voltage_mv;
-    ctx->telemetry.battery_pct      = raw.battery.soc_pct;
-    ctx->telemetry.confidence_pct   = raw.confidence_pct;
-    ctx->telemetry.vbus_present     = raw.battery.vbus_present;
-    ctx->telemetry.thermal_settled  = (raw.confidence_pct >= 80U);
+    app_telemetry_snapshot_t *t = &ctx->telemetry;
+    t->ambient_temp_c        = raw.ambient_temp_c;
+    t->ambient_temp_f        = raw.ambient_temp_f;
+    t->ambient_temp_k        = raw.ambient_temp_k;
+    t->ambient_rh_pct        = raw.ambient_rh_pct;
+    t->dew_point_c           = raw.dew_point_c;
+    t->dew_point_f           = raw.dew_point_f;
+    t->dew_point_k           = raw.dew_point_k;
+    t->vapor_pressure_hpa    = raw.vapor_pressure_hpa;
+    t->sat_vapor_pressure_hpa= raw.sat_vapor_pressure_hpa;
+    t->absolute_humidity_gm3 = raw.absolute_humidity_g;
+
+    t->shtc3_raw_temp_c      = raw.raw_shtc3_temp_c;
+    t->mcu_die_temp_c        = raw.mcu_die_temp_c;
+    t->epd_glass_temp_c      = raw.epd_glass_temp_c;
+    t->trinode_temp_c        = raw.trinode_temp_c;
+    t->trinode_delta_c       = raw.trinode_delta_c;
+    t->window_low_c          = raw.window_low_c;
+    t->window_high_c         = raw.window_high_c;
+    t->confidence_pct        = raw.trinode_confidence_pct;
+    t->thermally_settled     = raw.is_thermally_settled;
+    t->valid_trend           = raw.valid_trend;
+
+    t->autonomy_days         = raw.autonomy.autonomy_days;
+    t->avg_current_ma        = raw.autonomy.avg_draw_ma;
+    t->battery_mv            = raw.battery_mv;
+    t->battery_soc_pct       = raw.battery_percent;
+    t->vbus_present          = raw.is_usb_powered;
+    t->battery_state         = raw.battery_state;
+
+    t->sample_count          = raw.sample_count;
+    t->boot_count            = raw.boot_count;
+    t->wake_count            = raw.wake_count;
+    t->flow_b_count          = raw.flow_b_count;
+    t->button_wake_count     = raw.button_wake_count;
+    t->flow_a_period_sec     = raw.flow_a_period_sec;
+    t->flow_b_period_sec     = raw.flow_b_period_sec;
 
     return ESP_OK;
 }
 
-esp_err_t app_state_reset_credentials(app_context_t *ctx, bool factory_reset)
+bool app_state_evaluate_alarms(app_context_t *ctx)
 {
     if (ctx == NULL) {
-        return ESP_ERR_INVALID_ARG;
+        return false;
     }
 
-    ctx->attrs.wifi_provisioned = false;
-    if (factory_reset) {
-        ctx->attrs.device_claimed     = false;
-        ctx->attrs.tb_access_token[0] = '\0';
-        ctx->attrs.device_nickname[0] = '\0';
+    app_telemetry_snapshot_t *t = &ctx->telemetry;
+    const app_nvs_config_t *c   = &ctx->cfg;
+
+    if (t->alarm_temp_high) {
+        t->alarm_temp_high = (t->ambient_temp_c > (c->temp_high_c - APP_ALARM_HYSTERESIS_TEMP_C));
+    } else {
+        t->alarm_temp_high = (t->ambient_temp_c > c->temp_high_c);
     }
 
-    esp_err_t err = app_state_save_nvs(ctx);
-    ESP_LOGW(TAG, "Credentials reset (factory_reset=%u, err=0x%x) — restarting",
-             (unsigned int)factory_reset, (unsigned int)err);
-    esp_restart();
-    return err;
+    if (t->alarm_temp_low) {
+        t->alarm_temp_low = (t->ambient_temp_c < (c->temp_low_c + APP_ALARM_HYSTERESIS_TEMP_C));
+    } else {
+        t->alarm_temp_low = (t->ambient_temp_c < c->temp_low_c);
+    }
+
+    if (t->alarm_rh_high) {
+        t->alarm_rh_high = (t->ambient_rh_pct > (c->rh_high_pct - APP_ALARM_HYSTERESIS_RH_PCT));
+    } else {
+        t->alarm_rh_high = (t->ambient_rh_pct > c->rh_high_pct);
+    }
+
+    if (t->alarm_rh_low) {
+        t->alarm_rh_low = (t->ambient_rh_pct < (c->rh_low_pct + APP_ALARM_HYSTERESIS_RH_PCT));
+    } else {
+        t->alarm_rh_low = (t->ambient_rh_pct < c->rh_low_pct);
+    }
+
+    bool any_temp = (t->alarm_temp_high || t->alarm_temp_low);
+    bool any_rh   = (t->alarm_rh_high   || t->alarm_rh_low);
+
+    switch (c->alert_mode) {
+        case APP_ALERT_MODE_ANY_TEMP:
+            t->compound_alarm_active = any_temp;
+            break;
+        case APP_ALERT_MODE_ANY_RH:
+            t->compound_alarm_active = any_rh;
+            break;
+        case APP_ALERT_MODE_BOTH_REQUIRED:
+            t->compound_alarm_active = (any_temp && any_rh);
+            break;
+        case APP_ALERT_MODE_EITHER_OR:
+        default:
+            t->compound_alarm_active = (any_temp || any_rh);
+            break;
+    }
+
+    return t->compound_alarm_active;
+}
+
+float app_state_convert_temp(float temp_c, app_temp_unit_t unit, const char **out_unit_str)
+{
+    switch (unit) {
+        case APP_TEMP_UNIT_FAHRENHEIT:
+            if (out_unit_str) *out_unit_str = "F";
+            return H1OS_CELSIUS_TO_FAHRENHEIT(temp_c);
+        case APP_TEMP_UNIT_KELVIN:
+            if (out_unit_str) *out_unit_str = "K";
+            return H1OS_CELSIUS_TO_KELVIN(temp_c);
+        case APP_TEMP_UNIT_CELSIUS:
+        default:
+            if (out_unit_str) *out_unit_str = "C";
+            return temp_c;
+    }
+}
+
+float app_state_convert_vp(float vp_hpa, app_vp_unit_t unit, const char **out_unit_str)
+{
+    if (unit == APP_VP_UNIT_KPA) {
+        if (out_unit_str) *out_unit_str = "kPa";
+        return vp_hpa * 0.1f;
+    }
+    if (out_unit_str) *out_unit_str = "hPa";
+    return vp_hpa;
 }

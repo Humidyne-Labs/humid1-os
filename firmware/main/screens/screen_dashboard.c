@@ -1,100 +1,156 @@
 /**
  * @file screen_dashboard.c
- * @brief Clean-state LVGL v9 1-bit monochrome implementation of Screen 1 (Main Dashboard).
+ * @brief Screen 1: Primary Environmental Dashboard (H1OS 1-BPP Typography & Polarity Compliant).
+ *
+ * Layout (200x200 px, 6px safe margin -> 188px inner width):
+ *   - Header (y=0..24): Nickname (left) + Battery SoC% (right)
+ *   - Divider (y=25): 2px solid horizontal rule
+ *   - Hero RH (y=30..64): Relative Humidity % (H1OS_FONT_32)
+ *   - Primary Temp (y=68..96): Settled Ambient Temp in C/F/K (H1OS_FONT_24)
+ *   - Psychrometric Row (y=102..138): Dew Point & Vapor Pressure (H1OS_FONT_14)
+ *   - Alert / Settling Banner (y=144..170): Inverted 1-bit pill when alarm active
+ *   - Footer (y=174..198): Autonomy Days & Flow B interval
+ *
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
 #include "screen_dashboard.h"
 #include <stdio.h>
-#include "h1os/h1os.h"
+#include "app_state.h"
+#include "h1os/h1os_lvgl.h"
 
-static lv_obj_t *s_cont_dash   = NULL;
-static lv_obj_t *s_lbl_header  = NULL;
-static lv_obj_t *s_lbl_mode    = NULL;
-static lv_obj_t *s_lbl_alarm   = NULL;
-static lv_obj_t *s_lbl_rh      = NULL;
-static lv_obj_t *s_lbl_temp    = NULL;
-static lv_obj_t *s_lbl_dew     = NULL;
-static lv_obj_t *s_lbl_footer  = NULL;
-
-static lv_obj_t *create_1bpp_label(lv_obj_t *parent, const lv_font_t *font,
-                                   int32_t x, int32_t y, const char *initial_text)
+void screen_dashboard_render(lv_obj_t *parent, const app_context_t *ctx)
 {
-    lv_obj_t *lbl = lv_label_create(parent);
-    lv_obj_set_style_text_font(lbl, font, 0);
-    lv_obj_set_style_text_color(lbl, lv_color_black(), 0);
-    lv_label_set_long_mode(lbl, LV_LABEL_LONG_CLIP);
-    lv_obj_set_width(lbl, (int32_t)APP_UI_SAFE_TEXT_WIDTH_PX);
-    lv_obj_set_pos(lbl, x, y);
-    lv_label_set_text(lbl, initial_text);
-    return lbl;
-}
-
-void screen_dashboard_create(lv_obj_t *root)
-{
-    if (root == NULL) {
+    if (parent == NULL || ctx == NULL) {
         return;
     }
 
-    s_cont_dash = lv_obj_create(root);
-    lv_obj_remove_style_all(s_cont_dash);
-    lv_obj_set_size(s_cont_dash, (int32_t)APP_UI_SCREEN_WIDTH_PX, (int32_t)APP_UI_SCREEN_HEIGHT_PX);
-    lv_obj_set_style_bg_color(s_cont_dash, lv_color_white(), 0);
-    lv_obj_set_style_bg_opa(s_cont_dash, LV_OPA_COVER, 0);
+    lv_obj_clean(parent);
 
-    s_lbl_header = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 4, "HUMID1 READY");
-    s_lbl_mode   = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 134, 4, "[ AWAKE ]");
-    s_lbl_alarm  = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 26, "STATUS: NOMINAL");
-    s_lbl_rh     = create_1bpp_label(s_cont_dash, h1os_font_hero_48, 6, 52, "--.-%");
-    s_lbl_temp   = create_1bpp_label(s_cont_dash, h1os_font_ui_16, 6, 122, "TEMP: --.- F");
-    s_lbl_dew    = create_1bpp_label(s_cont_dash, h1os_font_ui_14, 6, 148, "DEW:  --.- F");
-    s_lbl_footer = create_1bpp_label(s_cont_dash, h1os_font_ui_12, 6, 178, "BAT: --% (----mV)");
-}
+    const bool dark = (ctx->cfg.theme == APP_THEME_DARK);
+    const lv_color_t bg_col = dark ? lv_color_hex(0x000000) : lv_color_hex(0xFFFFFF);
+    const lv_color_t fg_col = dark ? lv_color_hex(0xFFFFFF) : lv_color_hex(0x000000);
 
-void screen_dashboard_update(const app_context_t *ctx)
-{
-    if (ctx == NULL || s_cont_dash == NULL) {
-        return;
-    }
+    lv_obj_set_style_bg_color(parent, bg_col, 0);
+    lv_obj_set_style_bg_opa(parent, LV_OPA_COVER, 0);
+    lv_obj_remove_flag(parent, LV_OBJ_FLAG_SCROLLABLE);
 
-    char buf[48] = {0};
-    const char *id_str = (ctx->attrs.device_nickname[0] != '\0')
-                             ? ctx->attrs.device_nickname
-                             : ctx->attrs.device_uid;
+    char buf[48];
+    const app_telemetry_snapshot_t *t = &ctx->telemetry;
 
-    snprintf(buf, sizeof(buf), "%s %.11s",
-             ctx->wifi_connected ? "OK" : "OFF", id_str);
-    lv_label_set_text(s_lbl_header, buf);
+    /* 1. Top Header Bar: Nickname (Left) + Battery SoC (Right) */
+    lv_obj_t *lbl_nick = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_nick, H1OS_FONT_14, 0);
+    lv_obj_set_style_text_color(lbl_nick, fg_col, 0);
+    lv_label_set_long_mode(lbl_nick, LV_LABEL_LONG_CLIP);
+    lv_obj_set_width(lbl_nick, 128);
+    lv_label_set_text(lbl_nick, ctx->cfg.nickname);
+    lv_obj_set_pos(lbl_nick, 6, 5);
 
-    lv_label_set_text(s_lbl_mode, ctx->is_interactive ? "[ AWAKE ]" : "ZZZ SLEEP");
+    lv_obj_t *lbl_bat = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_bat, H1OS_FONT_14, 0);
+    lv_obj_set_style_text_color(lbl_bat, fg_col, 0);
+    snprintf(buf, sizeof(buf), "%s%u%%", t->vbus_present ? "+" : "", (unsigned)t->battery_soc_pct);
+    lv_label_set_text(lbl_bat, buf);
+    lv_obj_align(lbl_bat, LV_ALIGN_TOP_RIGHT, -6, 5);
 
-    const app_rtc_cache_t *rtc = (const app_rtc_cache_t *)0;
-    (void)rtc;
-    lv_label_set_text(s_lbl_alarm, "STATUS: NOMINAL");
+    /* 2px Header Rule */
+    lv_obj_t *hdr_line = lv_obj_create(parent);
+    lv_obj_remove_style_all(hdr_line);
+    lv_obj_set_size(hdr_line, 188, 2);
+    lv_obj_set_pos(hdr_line, 6, 24);
+    lv_obj_set_style_bg_color(hdr_line, fg_col, 0);
+    lv_obj_set_style_bg_opa(hdr_line, LV_OPA_COVER, 0);
 
-    snprintf(buf, sizeof(buf), "%.1f%%", (double)ctx->telemetry.rh_pct);
-    lv_label_set_text(s_lbl_rh, buf);
+    /* 2. Hero Metric: Relative Humidity (H1OS_FONT_32) */
+    lv_obj_t *lbl_rh = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_rh, H1OS_FONT_32, 0);
+    lv_obj_set_style_text_color(lbl_rh, fg_col, 0);
+    snprintf(buf, sizeof(buf), "%.1f%% RH", (double)t->ambient_rh_pct);
+    lv_label_set_text(lbl_rh, buf);
+    lv_obj_align(lbl_rh, LV_ALIGN_TOP_MID, 0, 30);
 
-    const float disp_temp = app_kelvin_to_display(ctx->telemetry.temp_k, ctx->attrs.temp_unit);
-    const float disp_dew  = app_kelvin_to_display(ctx->telemetry.dew_point_k, ctx->attrs.temp_unit);
-    const char  unit_ch   = app_temp_unit_char(ctx->attrs.temp_unit);
-
-    snprintf(buf, sizeof(buf), "TEMP: %.1f %c", (double)disp_temp, unit_ch);
-    lv_label_set_text(s_lbl_temp, buf);
-
-    snprintf(buf, sizeof(buf), "DEW:  %.1f %c", (double)disp_dew, unit_ch);
-    lv_label_set_text(s_lbl_dew, buf);
-
-    if (ctx->telemetry.vbus_present) {
-        snprintf(buf, sizeof(buf), "USB CHG (%u mV)", (unsigned int)ctx->telemetry.vbat_mv);
+    /* 3. Primary Settled Ambient Temperature (H1OS_FONT_24) */
+    const char *t_unit = "C";
+    float disp_temp = app_state_convert_temp(t->ambient_temp_c, ctx->cfg.temp_unit, &t_unit);
+    lv_obj_t *lbl_temp = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_temp, H1OS_FONT_24, 0);
+    lv_obj_set_style_text_color(lbl_temp, fg_col, 0);
+    if (ctx->cfg.temp_unit == APP_TEMP_UNIT_KELVIN) {
+        snprintf(buf, sizeof(buf), "%.1f K", (double)disp_temp);
     } else {
-        snprintf(buf, sizeof(buf), "BAT: %u%% (%u mV)",
-                 (unsigned int)ctx->telemetry.battery_pct,
-                 (unsigned int)ctx->telemetry.vbat_mv);
+        snprintf(buf, sizeof(buf), "%.1f°%s", (double)disp_temp, t_unit);
     }
-    lv_label_set_text(s_lbl_footer, buf);
-}
+    lv_label_set_text(lbl_temp, buf);
+    lv_obj_align(lbl_temp, LV_ALIGN_TOP_MID, 0, 68);
 
-lv_obj_t *screen_dashboard_get_container(void)
-{
-    return s_cont_dash;
+    /* 4. Secondary Psychrometric Strip: Dew Point & Vapor Pressure (H1OS_FONT_14) */
+    float disp_dew = app_state_convert_temp(t->dew_point_c, ctx->cfg.temp_unit, &t_unit);
+    lv_obj_t *lbl_dew = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_dew, H1OS_FONT_14, 0);
+    lv_obj_set_style_text_color(lbl_dew, fg_col, 0);
+    snprintf(buf, sizeof(buf), "Dew: %.1f %s", (double)disp_dew, t_unit);
+    lv_label_set_text(lbl_dew, buf);
+    lv_obj_set_pos(lbl_dew, 6, 102);
+
+    const char *vp_unit = "hPa";
+    float disp_vp = app_state_convert_vp(t->vapor_pressure_hpa, ctx->cfg.vp_unit, &vp_unit);
+    lv_obj_t *lbl_vp = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_vp, H1OS_FONT_14, 0);
+    lv_obj_set_style_text_color(lbl_vp, fg_col, 0);
+    snprintf(buf, sizeof(buf), "VP: %.1f %s", (double)disp_vp, vp_unit);
+    lv_label_set_text(lbl_vp, buf);
+    lv_obj_set_pos(lbl_vp, 6, 121);
+
+    /* 5. Status / Compound Alarm Banner (y=143..169) */
+    lv_obj_t *banner = lv_obj_create(parent);
+    lv_obj_remove_style_all(banner);
+    lv_obj_set_size(banner, 188, 24);
+    lv_obj_set_pos(banner, 6, 143);
+    lv_obj_set_style_border_width(banner, 2, 0);
+    lv_obj_set_style_border_color(banner, fg_col, 0);
+    lv_obj_set_style_border_opa(banner, LV_OPA_COVER, 0);
+
+    lv_obj_t *lbl_status = lv_label_create(banner);
+    lv_obj_set_style_text_font(lbl_status, H1OS_FONT_14, 0);
+
+    if (t->compound_alarm_active) {
+        lv_obj_set_style_bg_color(banner, fg_col, 0);
+        lv_obj_set_style_bg_opa(banner, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(lbl_status, bg_col, 0);
+        lv_label_set_text_static(lbl_status, "! ALERT: LIMIT BREACH !");
+    } else {
+        lv_obj_set_style_bg_color(banner, bg_col, 0);
+        lv_obj_set_style_bg_opa(banner, LV_OPA_COVER, 0);
+        lv_obj_set_style_text_color(lbl_status, fg_col, 0);
+        if (t->thermally_settled) {
+            snprintf(buf, sizeof(buf), "SETTLED (%u%% CONF)", (unsigned)t->confidence_pct);
+        } else {
+            snprintf(buf, sizeof(buf), "EQUILIBRATING (%u%%)", (unsigned)t->confidence_pct);
+        }
+        lv_label_set_text(lbl_status, buf);
+    }
+    lv_obj_center(lbl_status);
+
+    /* 6. Bottom Footer: Autonomy Days & Flow B Interval */
+    lv_obj_t *ftr_line = lv_obj_create(parent);
+    lv_obj_remove_style_all(ftr_line);
+    lv_obj_set_size(ftr_line, 188, 2);
+    lv_obj_set_pos(ftr_line, 6, 173);
+    lv_obj_set_style_bg_color(ftr_line, fg_col, 0);
+    lv_obj_set_style_bg_opa(ftr_line, LV_OPA_COVER, 0);
+
+    lv_obj_t *lbl_ftr = lv_label_create(parent);
+    lv_obj_set_style_text_font(lbl_ftr, H1OS_FONT_14, 0);
+    lv_obj_set_style_text_color(lbl_ftr, fg_col, 0);
+    if (t->autonomy_days > 0.0f) {
+        snprintf(buf, sizeof(buf), "Est: %.0fd | Sync: %lum",
+                 (double)t->autonomy_days, (unsigned long)(ctx->cfg.flow_b_sec / 60U));
+    } else {
+        snprintf(buf, sizeof(buf), "%umV | Sync: %lum",
+                 (unsigned)t->battery_mv, (unsigned long)(ctx->cfg.flow_b_sec / 60U));
+    }
+    lv_label_set_text(lbl_ftr, buf);
+    lv_obj_align(lbl_ftr, LV_ALIGN_BOTTOM_MID, 0, -4);
 }

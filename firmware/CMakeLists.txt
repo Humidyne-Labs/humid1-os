@@ -1,17 +1,12 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.16)
 
-# Validate IDF_PATH environment variable
-if(DEFINED ENV{IDF_PATH} AND NOT "$ENV{IDF_PATH}" STREQUAL "")
-    set(IDF_PATH "$ENV{IDF_PATH}")
-elseif(NOT DEFINED IDF_PATH OR IDF_PATH STREQUAL "")
-    message(FATAL_ERROR "IDF_PATH is not set. Set it to your ESP-IDF installation directory before configuring this project.")
+# Default to the 'dev' profile if SDKCONFIG_DEFAULTS is not explicitly provided
+if(NOT DEFINED SDKCONFIG_DEFAULTS AND NOT DEFINED ENV{SDKCONFIG_DEFAULTS})
+    set(SDKCONFIG_DEFAULTS "sdkconfig.defaults;sdkconfig.defaults.dev")
 endif()
 
-include("${IDF_PATH}/tools/cmake/project.cmake")
+include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(humid1_os)
 
-# Suppress warnings in external managed dependencies (e.g., LVGL)
-if(TARGET __idf_lvgl__lvgl)
-    target_compile_options(__idf_lvgl__lvgl PRIVATE -w)
-    set_target_properties(__idf_lvgl__lvgl PROPERTIES SYSTEM TRUE)
-endif()
+# Suppress false-positive -Werror=format-nonliteral on managed components under GCC 15+ (ESP-IDF v6.1)
+idf_build_set_property(COMPILE_OPTIONS "-Wno-format-nonliteral" APPEND)

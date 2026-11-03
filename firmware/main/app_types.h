@@ -1,232 +1,194 @@
 /**
  * @file app_types.h
- * @brief Core data structures, server-driven telemetry contracts, and state enumerations for Humid1-OS.
+ * @brief Shared data structures, enumerations, and state models for humid1-os.
  *
- * All temperature telemetry and server alarm thresholds use Kelvin (K) as the canonical
- * base unit per APP_02. Fixed-width <stdint.h> types are enforced per APP_08.
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
-#ifndef HUMID1_APP_TYPES_H
-#define HUMID1_APP_TYPES_H
+#ifndef APP_TYPES_H
+#define APP_TYPES_H
 
 #include <stdbool.h>
 #include <stdint.h>
 #include "app_config.h"
+#include "h1os/h1os.h"
+#include "h1os/h1os_lvgl.h"
+#include "h1os/h1os_time.h"
+#include "lvgl.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 /**
- * @brief Application top-level finite state machine states (APP_01 Section 4).
+ * @brief Application UI screen identifiers (200x200 1-Bit e-Paper).
  */
 typedef enum {
-    APP_STATE_BOOT_INIT = 0,    /**< Cold boot / wake initialization and NVS inspection */
-    APP_STATE_BLE_PROV,         /**< First-boot BLE GATT Security 1 Wi-Fi provisioning */
-    APP_STATE_SNTP_SYNC,        /**< Wall-clock NTP synchronization to PCF85063A RTC */
-    APP_STATE_TB_AUTO_PROV,     /**< Phase 1 ThingsBoard device registration (/provision/request) */
-    APP_STATE_TB_CLAIMING,      /**< Phase 2 customer device claiming (v1/devices/me/claim) */
-    APP_STATE_FLOW_B_SYNC,      /**< Unattended periodic Flow B wake (MQTTS sync + EPD update) */
-    APP_STATE_INTERACTIVE,      /**< User button wake (AWAKE badge, 3-screen navigation, 30s timeout) */
-    APP_STATE_OTA_UPDATE        /**< Dual-slot firmware download, verification, and reboot */
-} app_fsm_state_t;
-
-/**
- * @brief Active user screen index cycled via BOOT (GPIO 0) button taps (APP_04 Section 3).
- */
-typedef enum {
-    APP_SCREEN_DASHBOARD = 0,   /**< Screen 1: Main climate and connection dashboard */
-    APP_SCREEN_DIAGNOSTICS,     /**< Screen 2: Tri-Node metrology, psychrometrics, and autonomy */
-    APP_SCREEN_SYSTEM,          /**< Screen 3: Active server alarms, system state, and actions */
-    APP_SCREEN_USER_COUNT,      /**< Total number of cycleable user screens (3) */
-    APP_SCREEN_MODAL_PROV = 10, /**< Modal: BLE Wi-Fi Provisioning (QR + PIN + UID) */
-    APP_SCREEN_MODAL_CLAIM,     /**< Modal: Customer Claiming (PIN + UID + 180s timer) */
-    APP_SCREEN_MODAL_OTA        /**< Modal: OTA Firmware Update Progress */
+    SCREEN_DASHBOARD   = 0, /**< Screen 1: Primary environmental telemetry & status.       */
+    SCREEN_DIAGNOSTICS = 1, /**< Screen 2: Psychrometric matrix, Tri-Node & battery stats. */
+    SCREEN_SYSTEM      = 2, /**< Screen 3: System controls, theme polarity, mute, storage. */
+    SCREEN_ONBOARDING  = 3, /**< Screen 4: Out-of-box QR code & BLE/claim onboarding.      */
+    SCREEN_COUNT       = 4
 } app_screen_id_t;
 
 /**
- * @brief Display temperature unit preference (APP_04 Section 1).
+ * @brief Temperature display unit enumeration.
  */
 typedef enum {
-    APP_TEMP_UNIT_FAHRENHEIT = 0, /**< Convert Kelvin to Fahrenheit: (K - 273.15) * 1.8 + 32 */
-    APP_TEMP_UNIT_CELSIUS    = 1, /**< Convert Kelvin to Celsius: K - 273.15 */
-    APP_TEMP_UNIT_KELVIN     = 2  /**< Display canonical Kelvin directly */
+    APP_TEMP_UNIT_CELSIUS    = 0, /**< Degrees Celsius (°C) - Default.    */
+    APP_TEMP_UNIT_FAHRENHEIT = 1, /**< Degrees Fahrenheit (°F).           */
+    APP_TEMP_UNIT_KELVIN     = 2  /**< Absolute Kelvin (K).               */
 } app_temp_unit_t;
 
 /**
- * @brief Bitmask flags for server-driven telemetry serialization (APP_02 Section 3.2).
+ * @brief Vapor pressure display unit enumeration.
  */
 typedef enum {
-    APP_TELE_MASK_RH            = (1U << 0), /**< "rh" (% relative humidity) */
-    APP_TELE_MASK_TEMP_K        = (1U << 1), /**< "temp" (Kelvin) */
-    APP_TELE_MASK_BATTERY       = (1U << 2), /**< "battery" (% state of charge) */
-    APP_TELE_MASK_RSSI          = (1U << 3), /**< "rssi" (dBm) */
-    APP_TELE_MASK_DEW_POINT_K   = (1U << 4), /**< "dew_point" (Kelvin) */
-    APP_TELE_MASK_VBAT_MV       = (1U << 5), /**< "vbat_mv" (millivolts) */
-    APP_TELE_MASK_AUTONOMY_DAYS = (1U << 6), /**< "autonomy_days" (days) */
-    APP_TELE_MASK_CONFIDENCE    = (1U << 7), /**< "confidence" (% thermal equilibrium) */
-    APP_TELE_MASK_DEFAULT       = 0x0FU      /**< Canonical 4-key ThingsBoard schema */
-} app_telemetry_mask_t;
+    APP_VP_UNIT_HPA = 0, /**< Hectopascals (hPa) - Default. */
+    APP_VP_UNIT_KPA = 1  /**< Kilopascals (kPa).            */
+} app_vp_unit_t;
 
 /**
- * @brief Server-driven alarm severity levels (APP_02 Section 5).
+ * @brief 1-Bit e-Paper visual polarity theme.
  */
 typedef enum {
-    APP_ALARM_SEV_NONE = 0,
-    APP_ALARM_SEV_WARNING,
-    APP_ALARM_SEV_CRITICAL
-} app_alarm_severity_t;
+    APP_THEME_LIGHT = 0, /**< Black text on White background (Default). */
+    APP_THEME_DARK  = 1  /**< White text on Black background.           */
+} app_theme_t;
 
 /**
- * @brief Server-evaluated alarm state synchronized from ThingsBoard SHARED_SCOPE.
+ * @brief Telemetry transmission mode (Wake-Send-Sleep vs Optional VBAT-Extending Batch Push).
  */
-typedef struct {
-    bool                    active;         /**< True when server has an active alarm on this device */
-    app_alarm_severity_t    severity;       /**< NONE, WARNING, or CRITICAL */
-    char                    type[24];       /**< e.g., "RH Alarm", "Temp Alarm", "Battery Alarm" */
-    char                    message[64];    /**< Formatted server description */
-} app_alarm_state_t;
+typedef enum {
+    APP_TELEM_MODE_IMMEDIATE = 0, /**< Default: Wake -> Send current settled snapshot -> Sleep on every Flow B. */
+    APP_TELEM_MODE_BATCH     = 1  /**< Optional VBAT Saver: Accumulate RTC ring-buffer samples & push every Nth Flow B. */
+} app_telem_mode_t;
 
 /**
- * @brief Server-configured alarm thresholds and hysteresis (temperatures in Kelvin).
+ * @brief Threshold alarm trigger condition mode.
  */
-typedef struct {
-    float rh_low_crit;          /**< Critical low RH% threshold */
-    float rh_low_warn;          /**< Warning low RH% threshold */
-    float rh_high_warn;         /**< Warning high RH% threshold */
-    float rh_high_crit;         /**< Critical high RH% threshold */
-    float temp_low_crit_k;      /**< Critical low temperature threshold (Kelvin) */
-    float temp_low_warn_k;      /**< Warning low temperature threshold (Kelvin) */
-    float temp_high_warn_k;     /**< Warning high temperature threshold (Kelvin) */
-    float temp_high_crit_k;     /**< Critical high temperature threshold (Kelvin) */
-    float batt_low_crit_pct;    /**< Critical low battery SOC% threshold */
-    float batt_low_warn_pct;    /**< Warning low battery SOC% threshold */
-    float rh_hysteresis;        /**< RH% hysteresis deadband */
-    float temp_hysteresis_k;    /**< Temperature hysteresis deadband (Kelvin) */
-    float batt_hysteresis_pct;  /**< Battery hysteresis deadband (%) */
-} app_thresholds_t;
+typedef enum {
+    APP_ALERT_MODE_ANY_TEMP      = 0, /**< Trigger if Temp exceeds high or low limit.                */
+    APP_ALERT_MODE_ANY_RH        = 1, /**< Trigger if RH exceeds high or low limit.                  */
+    APP_ALERT_MODE_EITHER_OR     = 2, /**< Trigger if EITHER Temp OR RH exceeds limits (Default).    */
+    APP_ALERT_MODE_BOTH_REQUIRED = 3  /**< Trigger ONLY if BOTH Temp AND RH exceed limits together.  */
+} app_alert_mode_t;
 
 /**
- * @brief Unified server-driven telemetry frame populated from H1OS and Wi-Fi state.
+ * @brief Persistent configuration model stored in NVS via h1os_nvs_*.
  */
 typedef struct {
-    int64_t  timestamp_ms;      /**< Unix epoch timestamp in milliseconds */
-    float    rh_pct;            /**< Compensated relative humidity (%) */
-    float    temp_k;            /**< Tri-Node compensated ambient temperature (Kelvin) */
-    float    dew_point_k;       /**< Psychrometric dew point temperature (Kelvin) */
-    float    shtc3_raw_k;       /**< Raw SHTC3 sensor temperature (Kelvin) */
-    float    mcu_die_k;         /**< ESP32-S3 internal die temperature (Kelvin) */
-    float    epd_glass_k;       /**< SSD1681 panel glass temperature (Kelvin) */
-    float    vapor_press_hpa;   /**< Actual vapor pressure (hPa) */
-    float    sat_vp_hpa;        /**< Saturation vapor pressure (hPa) */
-    float    abs_humidity_gm3;  /**< Absolute humidity (g/m^3) */
-    float    autonomy_days;     /**< Projected remaining battery autonomy (days) */
-    float    avg_current_ma;    /**< Rolling average system current draw (mA) */
-    uint16_t vbat_mv;           /**< Calibrated battery voltage (mV) */
-    uint8_t  battery_pct;       /**< LiPo state-of-charge (0..100%) */
-    uint8_t  confidence_pct;    /**< Tri-Node thermal settling confidence (0..100%) */
-    int8_t   rssi_dbm;          /**< Wi-Fi RSSI in dBm */
-    bool     vbus_present;      /**< True if 5V USB power is connected */
-    bool     thermal_settled;   /**< True if SAMPLE_FLAG_THERMAL_SETTLED is asserted */
-} app_telemetry_frame_t;
+    bool             provisioned;                           /**< True if Wi-Fi credentials are saved.      */
+    bool             claimed;                               /**< True if ThingsBoard device is claimed.    */
+    char             tb_token[APP_TOKEN_MAX_LEN];           /**< ThingsBoard device access token.          */
+    char             claim_secret[APP_CLAIM_SECRET_MAX_LEN];/**< Factory/Dynamic claim secret key.         */
+    char             nickname[APP_NICKNAME_MAX_LEN];        /**< User-assigned humidor nickname.           */
+    uint32_t         flow_a_sec;                            /**< Headless sensor burst interval (seconds). */
+    uint32_t         flow_b_sec;                            /**< Display & cloud sync interval (seconds).  */
+    app_temp_unit_t  temp_unit;                             /**< Active temperature unit (C / F / K).      */
+    app_vp_unit_t    vp_unit;                               /**< Active vapor pressure unit (hPa / kPa).   */
+    app_theme_t      theme;                                 /**< Active 1-bit UI polarity theme.           */
+    bool             sound_enabled;                         /**< True if acoustic feedback is enabled.     */
+    uint8_t          volume_pct;                            /**< Master speaker volume (0..100%).          */
+    app_alert_mode_t alert_mode;                            /**< Compound alarm evaluation mode.           */
+    bool             batch_telemetry_en;                    /**< False=Wake-Send-Sleep, True=Batch History.*/
+    uint8_t          batch_flow_b_ratio;                    /**< Flow B cycles per Wi-Fi burst in batch mode.*/
+    float            temp_high_c;                           /**< High temperature alarm threshold (°C).    */
+    float            temp_low_c;                            /**< Low temperature alarm threshold (°C).     */
+    float            rh_high_pct;                           /**< High relative humidity threshold (%RH).   */
+    float            rh_low_pct;                            /**< Low relative humidity threshold (%RH).    */
+} app_nvs_config_t;
 
 /**
- * @brief Synchronized ThingsBoard Shared Attributes and persistent device configuration.
+ * @brief Normalized environmental & hardware telemetry snapshot derived from h1os_telemetry_t.
  */
 typedef struct {
-    uint32_t            flow_a_period_sec;      /**< Headless sensor sample interval (s) */
-    uint32_t            flow_b_period_sec;      /**< Full wake & cloud sync interval (s) */
-    uint32_t            telemetry_schema_mask;  /**< Bitmask of server-enabled telemetry keys */
-    app_temp_unit_t     temp_unit;              /**< Display temperature unit (F, C, K) */
-    bool                wifi_provisioned;       /**< True when Wi-Fi credentials exist in NVS */
-    bool                device_claimed;         /**< True when customer claim is completed */
-    bool                theme_dark;             /**< True for dark/inverted e-Paper theme */
-    bool                sound_enabled;          /**< True when interactive audio cues are enabled */
-    bool                auto_update_enabled;    /**< True when automatic FOTA on wake is enabled */
-    bool                manual_ota_trigger;     /**< True when immediate FOTA is requested */
-    bool                email_alerts_enabled;   /**< Server email alert state mirror */
-    char                device_uid[20];         /**< Hardware UID: "HUMID1_A1B2C3" */
-    char                device_nickname[32];    /**< Optional server-assigned nickname */
-    char                tb_access_token[64];    /**< Permanent ThingsBoard device access token */
-    char                target_fw_version[24];  /**< Target FOTA version string from server */
-    char                target_fw_checksum[68]; /**< Target FOTA SHA-256 hex digest */
-} app_config_attrs_t;
+    /* Primary Settled Environmental Metrics */
+    float                ambient_temp_c;
+    float                ambient_temp_f;
+    float                ambient_temp_k;
+    float                ambient_rh_pct;
+    float                dew_point_c;
+    float                dew_point_f;
+    float                dew_point_k;
+    float                vapor_pressure_hpa;
+    float                sat_vapor_pressure_hpa;
+    float                absolute_humidity_gm3;
+
+    /* Tri-Node & Window Diagnostics */
+    float                shtc3_raw_temp_c;
+    float                mcu_die_temp_c;
+    float                epd_glass_temp_c;
+    float                trinode_temp_c;
+    float                trinode_delta_c;
+    float                window_low_c;
+    float                window_high_c;
+    uint8_t              confidence_pct;
+    bool                 thermally_settled;
+    uint16_t             valid_trend;
+
+    /* Power & Autonomy Metrics */
+    float                autonomy_days;
+    float                avg_current_ma;
+    uint16_t             battery_mv;
+    uint8_t              battery_soc_pct;
+    bool                 vbus_present;
+    h1os_battery_state_t battery_state;
+
+    /* Monotonic Counters & Flow Intervals */
+    uint32_t             sample_count;
+    uint32_t             boot_count;
+    uint32_t             wake_count;
+    uint32_t             flow_b_count;
+    uint32_t             button_wake_count;
+    uint32_t             flow_a_period_sec;
+    uint32_t             flow_b_period_sec;
+
+    /* Alarm Evaluation State */
+    bool                 alarm_temp_high;
+    bool                 alarm_temp_low;
+    bool                 alarm_rh_high;
+    bool                 alarm_rh_low;
+    bool                 compound_alarm_active;
+} app_telemetry_snapshot_t;
 
 /**
- * @brief RTC Slow SRAM cache surviving deep sleep without NVS flash wear (APP_01 Section 5.2).
+ * @brief ThingsBoard Native OTA shared attribute state (APP_06).
  */
 typedef struct {
-    uint32_t            magic;                  /**< Validation magic 0x48314150UL ("H1AP") */
-    uint8_t             last_bssid[6];          /**< Cached AP BSSID for fast single-channel connect */
-    uint8_t             last_channel;           /**< Cached Wi-Fi channel (1..13) */
-    uint32_t            last_sntp_epoch;        /**< Unix epoch of last SNTP wall-clock sync */
-    uint32_t            last_sync_epoch;        /**< Unix epoch of last successful MQTTS sync */
-    uint16_t            consecutive_net_fails;  /**< Count of consecutive network failures */
-    int32_t             last_err_code;          /**< Last recorded esp_err_t / protocol error */
-    app_alarm_state_t   active_alarm;           /**< Cached server alarm state */
-    app_thresholds_t    thresholds;             /**< Cached server alarm thresholds */
-} app_rtc_cache_t;
+    char target_fw_title[32];
+    char target_fw_version[24];
+    char target_fw_checksum[68];
+    bool auto_update_enabled;
+    bool manual_ota_trigger;
+} app_ota_attrs_t;
 
 /**
- * @brief Master runtime context passed to application modules and UI screens.
+ * @brief Master runtime context for humid1-os (Strictly static allocation in .bss).
  */
 typedef struct {
-    app_fsm_state_t         fsm_state;          /**< Current state machine state */
-    app_screen_id_t         active_screen;      /**< Currently displayed LVGL screen */
-    bool                    is_interactive;     /**< True = AWAKE (button wake), False = SLEEP (RTC wake) */
-    bool                    wifi_connected;     /**< True when STA has valid IPv4 address */
-    uint8_t                 selected_action_idx;/**< Highlighted action item on Screen 3 (0..3) */
-    uint16_t                claim_rem_sec;      /**< Remaining seconds on claiming countdown */
-    char                    prov_pop_pin[12];   /**< 8-char TRNG Proof-of-Possession PIN */
-    char                    claim_pin[10];      /**< 6-char TRNG ThingsBoard Claim PIN */
-    char                    ip_addr_str[16];    /**< Assigned IPv4 address string */
-    char                    ssid_str[33];       /**< Connected Wi-Fi SSID string */
-    app_config_attrs_t      attrs;              /**< Persistent NVS & shared attributes */
-    app_telemetry_frame_t   telemetry;          /**< Latest sensor & battery telemetry in Kelvin */
+    app_nvs_config_t         cfg;
+    app_ota_attrs_t          attrs;
+    app_telemetry_snapshot_t telemetry;
+    app_screen_id_t          active_screen;
+    uint8_t                  system_menu_index;
+    h1os_wake_state_t        wake_state;
+    bool                     is_interactive_wake;
+    bool                     in_onboarding_mode;
+    uint32_t                 onboarding_elapsed_sec;
+    bool                     wifi_connected;
+    bool                     mqtt_connected;
+    bool                     ota_in_progress;
+    bool                     sync_ui_dirty;
+    int8_t                   wifi_rssi_dbm;
+    uint32_t                 last_sntp_sync_epoch;
+    lv_obj_t                *root_screen;
+    lv_group_t              *input_group;
 } app_context_t;
-
-/* ============================================================================
- * Inline Temperature Unit Conversion Helpers (Kelvin Base Unit)
- * ========================================================================== */
-
-/**
- * @brief Convert Celsius to canonical Kelvin.
- */
-static inline float app_celsius_to_kelvin(float temp_c)
-{
-    return temp_c + APP_KELVIN_OFFSET_F;
-}
-
-/**
- * @brief Convert canonical Kelvin to user-selected display unit ('F', 'C', or 'K').
- */
-static inline float app_kelvin_to_display(float temp_k, app_temp_unit_t unit)
-{
-    if (unit == APP_TEMP_UNIT_FAHRENHEIT) {
-        return ((temp_k - APP_KELVIN_OFFSET_F) * 1.8f) + 32.0f;
-    }
-    if (unit == APP_TEMP_UNIT_CELSIUS) {
-        return temp_k - APP_KELVIN_OFFSET_F;
-    }
-    return temp_k;
-}
-
-/**
- * @brief Return the unit suffix character ('F', 'C', or 'K') for UI formatting.
- */
-static inline char app_temp_unit_char(app_temp_unit_t unit)
-{
-    if (unit == APP_TEMP_UNIT_FAHRENHEIT) {
-        return 'F';
-    }
-    if (unit == APP_TEMP_UNIT_CELSIUS) {
-        return 'C';
-    }
-    return 'K';
-}
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* HUMID1_APP_TYPES_H */
+#endif /* APP_TYPES_H */

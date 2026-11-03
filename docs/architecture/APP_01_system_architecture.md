@@ -1,158 +1,98 @@
-# APP_01: System Architecture, State Machine & Lifecycle Orchestration
+# APP_01: System Architecture, Dual-Core Lifecycle & State Model
 
-* **Document ID:** `APP-ARCH-001` (Rev 2.0)
-* **Parent Blueprint:** [`Architectural_Outline.md`](../../Architectural_Outline.md)
-* **Normative Scope:** Layer 4 Application State Machine, H1OS Callback Execution Order, Dynamic Flow A/B Timing, and NVS/RTC State Partitioning
-
----
-
-## 1. Five-Layer Architectural Hierarchy
-
-The `humid1-os` firmware stack enforces strict unidirectional dependencies from Layer 4 (`firmware/main/`) into Layer 3 (`h1os.h`):
-
-```mermaid
-graph TD;
-    L4["Layer 4: Humid1-OS Application (BLE Prov, Wi-Fi/SNTP, ThingsBoard MQTTS, 3-Screen UI, OTA)"];
-    L3["Layer 3: H1OS Orchestrator & Public API (h1os.h Lifecycle, LVGL v9 Task, Tri-Node Math)"];
-    L2["Layer 2: H1OS Subsystems (Power, SHTC3, PCF85063A RTC, SSD1681 EPD, ES8311 Audio, SDMMC, NVS)"];
-    L1["Layer 1: H1OS HAL & Silicon Domains (I2C/SPI Buses, Pad Isolation, ULP-RISC-V Monitor)"];
-    HW["Layer 0: Physical Hardware (ESP32-S3-WROOM-1-N16R8, 16 MB Flash, 8 MB Octal PSRAM)"];
-    L4 --> L3;
-    L3 --> L2;
-    L2 --> L1;
-    L1 --> HW;
-```
-
-### 1.1 Architectural Boundaries
-
-- **H1OS Responsibility (Layers 1–3):** Early boot wake-stub arbitration (`orch_wake_stub.c`), ULP-RISC-V button/RTC pin monitoring (`GPIO 0`, `GPIO 18`, `GPIO 5`), SHTC3 + MCU Die + EPD Glass Tri-Node temperature sampling, LiPo OCV battery metrology, SPI e-Paper LUT refresh waveforms, and deep-sleep GPIO pad hold isolation.
-- **Humid1-OS Responsibility (Layer 4):** First-boot BLE Wi-Fi provisioning, SNTP wall-clock synchronization, ThingsBoard two-phase registration and claiming, server-driven MQTTS telemetry publishing and shared attribute synchronization, server alarm presentation, dual-slot OTA execution, and the 3-screen user interface.
+> **Module Scope:** `firmware/main/main.c`, `firmware/main/app_state.c`, `firmware/main/app_types.h`, `firmware/main/app_config.h`
+> **Target OS:** `H1OS >= v2.4.9-dev` (ESP-IDF `>= v6.1.0`, `ESP32-S3-PICO-1-N8R8`)
 
 ---
 
-## 2. Dynamic Wake Cadence: Flow A, Flow B & Interactive Sessions
+## 1. Architectural Layering & Strict Boundary Law
 
-H1OS operates two distinct periodic wake flows alongside user-initiated interactive wakes. As required by product specifications, the periods for **Flow A** and **Flow B** are dynamically controlled by the ThingsBoard server via Shared Attributes (`SHARED_SCOPE`), while the interactive inactivity timeout is hardcoded at **30 seconds**.
+`humid1-os` operates exclusively at the **User Application Layer** above the 4-layer **H1OS** middleware component (`components/h1os`):
 
-| Flow / Mode | Trigger Source | Radio State | Display State | Default Period | Configuration Source |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Flow A (Headless Sample)** | PCF85063A RTC Countdown (`GPIO 5`) when `wake_counter < ratio` | **OFF** (Zero RF) | **OFF** (High-Z) | `60 s` | Server Shared Attribute `flow_a_period_sec` (persisted in NVS `flow_a_sec`) |
-| **Flow B (Telemetry & EPD Sync)** | PCF85063A RTC Countdown (`GPIO 5`) when `wake_counter >= ratio` | **ON** (Fast Wi-Fi + MQTTS Burst) | **ON** (Partial/Full Refresh with `SLEEP` badge) | `900 s` (15 min) | Server Shared Attribute `sleep_interval_sec` / `flow_b_period_sec` (persisted in NVS `flow_b_sec`) |
-| **Interactive Session** | Tactile Button Press (`BOOT` `GPIO 0` or `POWER` `GPIO 18`) | **ON** (On-demand sync / actions) | **ON** (Active UI with `AWAKE` badge) | `30 s` timeout | Hardcoded constant `APP_INACTIVITY_TIMEOUT_SEC = 30U` |
-
-### 2.1 Dynamic Flow A/B Synchronization Math
-
-In H1OS, the wake stub (`orch_wake_stub.c`) wakes the main CPU into a full session (`Flow B`) every $R$ wakes of `Flow A`, where the integer ratio $R$ is computed as:
-
-$$
-R = \max\left(1, \left\lfloor \frac{T_{\text{Flow B}}}{T_{\text{Flow A}}} \right\rfloor\right)
-$$
-
-When the ThingsBoard server pushes an updated `sleep_interval_sec` (or `sleep_interval_min * 60`) or `flow_a_period_sec`:
-1. The application validates bounds ($T_{\text{Flow A}} \in [15\,\text{s}, 3600\,\text{s}]$, $T_{\text{Flow B}} \in [60\,\text{s}, 86400\,\text{s}]$, and $T_{\text{Flow B}} \ge T_{\text{Flow A}}$).
-2. The application commits the updated intervals to the `app_cfg` NVS namespace (`flow_a_sec`, `flow_b_sec`).
-3. The application updates the active H1OS session timing configuration prior to `h1os_sleep()` so the PCF85063A alarm timer arms with the new interval immediately (see `MANDATE-04` in [`APP_07_os_api_mandates.md`](APP_07_os_api_mandates.md)).
+1. **Layer 1 (`hal_*` — H1OS Internal):** Stateless register and peripheral primitives. **Forbidden in app code.**
+2. **Layer 2 (`sub_*` — H1OS Internal):** Encapsulated hardware drivers (`sub_display`, `sub_rtc`, `sub_power`, `sub_audio`, `sub_nvs`, `sub_sdcard`). **Forbidden in app code.**
+3. **Layer 3 (`orch_*` — H1OS Internal):** Flow arbiter, `648-byte` `RTC_SLOW_MEM` state, `-O2` RTC wake stub (`orch_wake_stub.c`), and Pure Event Mode ULP-RISC-V monitor (`ulp/main.c`). **Direct `orch_state_get()` mutation is strictly forbidden in app code.**
+4. **Layer 4 (`h1os_*` — Public OS Boundary):** `<h1os/h1os.h>`, `<h1os/h1os_lvgl.h>`, `<h1os/h1os_time.h>`, and `h1os_fonts.h`.
+5. **User Application (`humid1-os`):** Declarative lifecycle hooks (`app_on_boot`, `app_on_wake`, `app_on_sync`, `app_on_pre_sleep`, `app_on_shutdown`, `app_on_error`), NVS configuration (`app_state.c`), cloud telemetry (`cloud_tb.c`), BLE/Wi-Fi onboarding (`net_wifi_ble.c`), Dual-OTA verification (`app_ota.c`), and 4 LVGL screens (`screens/screen_*.c`).
 
 ---
 
-## 3. H1OS Lifecycle Callback Execution Order
+## 2. Declarative Lifecycle & Parallel Dual-Core Execution (`MANDATE-04`)
 
-Understanding the exact call sequence inside `h1os_start()` (`h1os_lifecycle.c`) is mandatory for deterministic radio and UI operation:
+`app_main()` initializes `h1os_lifecycle_t` via `H1OS_LIFECYCLE_DEFAULT_CONFIG()` and transfers control to `h1os_start(&lifecycle)`:
 
 ```mermaid
 sequenceDiagram
-    participant H1OS as H1OS Orchestrator (h1os_lifecycle.c)
-    participant App as Humid1-OS Callbacks (main.c)
-    participant Net as Wi-Fi / BLE / MQTTS (net_wifi_ble.c / cloud_tb.c)
-    participant UI as LVGL v9 Screens (screens/*.c)
+    participant H1OS as H1OS Core 0 (h1os_lifecycle.c)
+    participant App0 as humid1-os Core 0 Callbacks
+    participant Core1 as H1OS Core 1 (h1os_lvgl_port_task)
+    participant Cloud as Wi-Fi / SNTP / ThingsBoard MQTTS
 
-    H1OS->>H1OS: Boot & Evaluate Wake Cause (Cold Boot vs RTC Flow B vs Button EXT1)
-    alt Cold Power-On Reset
-        H1OS->>App: on_boot(&ctx, user_data)
-        App->>App: Load NVS Config & Build Initial LVGL Screen Tree
+    H1OS->>H1OS: Validate Flow A/B Periods & Init Subsystems
+    H1OS->>H1OS: h1os_lvgl_init(is_wake) + Restore epd_frame
+    alt Cold Boot (ORCH_FLOW_BOOT)
+        H1OS->>App0: app_on_boot(user_data)
+    else Deep Sleep Wake (RTC Flow B or Button)
+        H1OS->>App0: app_on_wake(ctx, user_data)
     end
-    H1OS->>H1OS: Acquire h1os_lvgl_lock(1000)
-    H1OS->>App: on_wake(&ctx, user_data)
-    alt Unprovisioned (wifi_prov == 0)
-        App->>UI: Switch to screen_provisioning (QR + PIN + UID)
-        App->>Net: Start BLE GATT Security 1 Provisioning
-    else Unattended RTC Flow B Wake (is_rtc_wake == true)
-        App->>Net: Fast Wi-Fi Connect + MQTTS Publish + Shared Attr & Alarm Sync
-        App->>App: Check Pending OTA (Trigger Dual-Slot Update if Flagged)
-        App->>UI: Set Header Badge to "SLEEP" & Populate Dashboard Widgets
-    else Interactive Button Wake (is_rtc_wake == false)
-        App->>UI: Set Header Badge to "AWAKE" & Populate Active Screen
-        App->>Net: Optional Background MQTTS Sync
+    App0->>App0: Load NVS, Refresh Telemetry, Bind Keypad, Render Active Screen
+    H1OS->>Core1: h1os_lvgl_start(5, 1) (Core 1 begins LVGL layout & SSD1681 SPI DMA)
+    par Core 0 Network Sync in Parallel with Core 1 Display Flush
+        H1OS->>App0: app_on_sync(ctx, user_data)
+        App0->>Cloud: Wi-Fi Burst (5s) -> SNTP -> MQTTS Telemetry & RPCs (3.5s)
+        opt Cloud RPC / Attribute Updated UI State
+            App0->>Core1: h1os_ui_post(app_ui_sync_update_cb, app, 100)
+        end
+        H1OS->>H1OS: h1os_sync_notify_complete() (Sets BARRIER_SYNC_DONE)
+    and Core 1 e-Paper Refresh
+        Core1->>Core1: Flush 1-Bit Framebuffer & Wait EPD_BUSY (Sets BARRIER_DISPLAY_DONE)
     end
-    App-->>H1OS: Return from on_wake()
-    H1OS->>H1OS: Release h1os_lvgl_lock() & Start LVGL Worker Task
-    alt is_rtc_wake == true (Unattended Flow B)
-        H1OS->>H1OS: Drain LVGL Queue & Flush SSD1681 EPD Panel
-        H1OS->>App: on_pre_sleep(&ctx, user_data)
-        App->>Net: Verify Wi-Fi / BLE Deinitialized & Locks Released
-        H1OS->>H1OS: Isolate GPIO Pads & Enter Deep Sleep (flow_b_period_sec)
-    else is_rtc_wake == false (Interactive Session)
-        H1OS->>H1OS: Run 30s Inactivity Loop (Button Polling & Screen Refreshes)
-        H1OS->>App: on_pre_sleep(&ctx, user_data)
-        App->>UI: Switch Header Badge to "SLEEP" & Return to Dashboard
-        App->>Net: Tear Down Active Radio Connections
-        H1OS->>H1OS: Flush Final Sleep Frame to EPD & Enter Deep Sleep
+    alt Unattended Wake (H1OS_WAKE_STATE_RTC_FLOW_B)
+        H1OS->>H1OS: Wait s_sleep_barrier_group (BARRIER_SYNC_DONE | BARRIER_DISPLAY_DONE)
+        H1OS->>App0: app_on_pre_sleep(flow_b_period_sec, user_data)
+        H1OS->>H1OS: Enter Deep Sleep immediately
+    else Interactive Session (BOOT or POWER Button Wake)
+        H1OS->>H1OS: Arm 30-second esp_timer inactivity countdown
     end
 ```
 
-### 3.1 Critical Execution Invariant on Unattended RTC Wakes (`Flow B`)
+---
 
-In `h1os_lifecycle.c`, when `is_rtc_wake == true` (unattended periodic Flow B wake), H1OS invokes `on_wake()`, starts the LVGL task, drains the display buffer once, and immediately invokes `h1os_sleep()`. Therefore:
-- During an unattended RTC `Flow B` wake, the fast Wi-Fi connection, ThingsBoard MQTTS telemetry publish, shared attribute fetch, and OTA check **must execute synchronously inside `on_wake()`** (bounded to $\le 3500\,\text{ms}$) before `on_wake()` returns.
-- Inside `on_wake()`, the application updates the LVGL screen labels with the latest psychrometric readings, active server alarm state, and the `SLEEP` status indicator, so the single post-`on_wake()` EPD flush writes the complete, up-to-date frame prior to deep sleep.
+## 3. Flow A & Flow B Silicon Timing Invariants (`MANDATE-02`)
+
+All runtime changes to `flow_a_sec` (headless sensor burst interval) and `flow_b_sec` (display & cloud sync interval) MUST pass `app_state_validate_flow_periods()` and be committed via `h1os_set_flow_periods(flow_a_sec, flow_b_sec)`:
+
+| Invariant | Constraint | Hardware / Architectural Reason |
+| :--- | :--- | :--- |
+| **1. Flow A Bounds** | `60 s <= flow_a_sec <= 14400 s` (`1 min` .. `4 hr`) | Prevents SHTC3 thermal self-heating (`>= 60 s`) and bounds sample latency. |
+| **2. Flow B Bounds** | `300 s <= flow_b_sec <= 86400 s` (`5 min` .. `24 hr`) | Bounds e-Paper mechanical refresh wear and LiPo RF current draw. |
+| **3. Prescaler Alignment** | If `flow_a_sec > 255 s`, `flow_a_sec % 60 == 0` | NXP `PCF85063A` countdown timer switches from `1 Hz` to `1/60 Hz` clock above `255 s`. |
+| **4. Strict Ordering** | `flow_b_sec > flow_a_sec` | Flow B presentation wakes must span multiple headless Flow A bursts. |
+| **5. Remainder Floor** | `remainder = flow_b_sec % flow_a_sec` is `0` or `>= 60 s` | Prevents sub-60s final slices before Flow B. |
+| **6. Remainder Alignment** | If `remainder > 255 s`, `remainder % 60 == 0` | Matches `PCF85063A` `1/60 Hz` countdown prescaler on the final slice. |
 
 ---
 
-## 4. Application Finite State Machine
+## 4. Persistent NVS Configuration Schema (`app_nvs_config_t`)
 
-The application state machine (`app_fsm_state_t` in `app_types.h`) transitions deterministically across seven states:
-
-| State Enum | Description | Entry Condition | Exit Transition |
-| :--- | :--- | :--- | :--- |
-| `APP_STATE_BOOT_INIT` | Initial NVS load, RTC fast-cache check, and hardware identity derivation (`HUMID1_<MAC>`). | Cold boot or wake from deep sleep. | Transitions to `BLE_PROV` if `wifi_prov == 0`, else evaluates token/claim state. |
-| `APP_STATE_BLE_PROV` | BLE GATT Wi-Fi provisioning (`protocomm_ble` Security 1) with QR + PoP PIN on screen. | `wifi_prov == 0` in NVS. | Wi-Fi IP acquired $\rightarrow$ BLE stack completely deinitialized $\rightarrow$ `SNTP_SYNC`. |
-| `APP_STATE_SNTP_SYNC` | NTP wall-clock acquisition (`pool.ntp.org`, `time.cloudflare.com`) written to PCF85063A RTC. | First Wi-Fi connection after provisioning, or RTC drift refresh ($\ge 24\,\text{h}$). | Valid Unix epoch ($\ge 2026$) $\rightarrow$ `TB_AUTO_PROV` or `TB_CLAIMING` or `FLOW_B_SYNC`. |
-| `APP_STATE_TB_AUTO_PROV` | Phase 1 ThingsBoard device registration via `/provision/request` to obtain `tb_token`. | `wifi_prov == 1` and `tb_token` empty in NVS. | `credentialsValue` saved to NVS `tb_token` $\rightarrow$ `TB_CLAIMING`. |
-| `APP_STATE_TB_CLAIMING` | Phase 2 customer device claiming via `v1/devices/me/claim` with 180s countdown on EPD. | `tb_token` valid, `claimed == 0` in NVS. | Customer claims device on dashboard (confirmed via attribute/RPC) $\rightarrow$ `INTERACTIVE`. |
-| `APP_STATE_FLOW_B_SYNC` | Unattended RTC wake: fast Wi-Fi burst, MQTTS telemetry publish, attribute/alarm sync, OTA check. | Unattended RTC Flow B wake (`wifi_prov == 1 && claimed == 1`). | If OTA flagged $\rightarrow$ `OTA_UPDATE`; else EPD flush (`SLEEP` badge) $\rightarrow$ Deep Sleep. |
-| `APP_STATE_INTERACTIVE` | User button wake: `AWAKE` badge, 30s inactivity timer, 2-button navigation across Screens 1–3. | `BOOT` (`GPIO 0`) or `POWER` (`GPIO 18`) button press. | 30s inactivity timeout $\rightarrow$ `SLEEP` badge flush $\rightarrow$ Deep Sleep. |
-| `APP_STATE_OTA_UPDATE` | Dual-slot firmware download (`ota_0`/`ota_1`), SHA-256 verification, and reboot. | `manual_ota_trigger == true` or `auto_update_enabled && fw_version > current`. | Image verified $\rightarrow$ `esp_restart()`; on error $\rightarrow$ report `FAILED` and resume sleep. |
-
----
-
-## 5. Non-Volatile Storage (`app_cfg`) & RTC Fast Cache Architecture
-
-To prevent NVS flash wear (`PIT-05-D`) while surviving deep sleep resets (`PIT-05-A`), state is partitioned between the `app_cfg` NVS namespace (written only on configuration changes) and `RTC_DATA_ATTR` SRAM (retained across deep sleep with zero flash wear):
-
-### 5.1 NVS Key Registry (Namespace: `"app_cfg"`)
+All NVS keys are strictly `<= 15` ASCII characters (`app_config.h`) and accessed through `h1os_nvs_*`:
 
 | NVS Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `"wifi_prov"` | `u8` | `0` | `1` when Wi-Fi SSID/password are provisioned in NVS. |
-| `"claimed"` | `u8` | `0` | `1` when customer claiming is completed and verified. |
-| `"tb_token"` | `str` (64B) | `""` | Permanent device access token returned by ThingsBoard `/provision/response`. |
-| `"nickname"` | `str` (32B) | `""` | User-assigned device nickname synchronized from ThingsBoard `device_nickname`. |
-| `"temp_unit"` | `u8` | `0` (`'F'`) | Display temperature unit (`0` = Fahrenheit, `1` = Celsius, `2` = Kelvin). |
-| `"theme_dark"` | `u8` | `0` | `0` = Light theme (black ink on white background), `1` = Dark theme (inverted). |
-| `"sound_en"` | `u8` | `1` | `1` = Audio feedback enabled during interactive sessions, `0` = Muted. |
-| `"auto_ota"` | `u8` | `1` | `1` = Automatic OTA updates enabled on wake check, `0` = Manual trigger only. |
-| `"flow_a_sec"` | `u32` | `60` | Headless sensor sampling interval in seconds (`Flow A`). |
-| `"flow_b_sec"` | `u32` | `900` | Telemetry publish and display sync interval in seconds (`Flow B`). |
-
-### 5.2 RTC Slow SRAM Cache (`RTC_DATA_ATTR app_rtc_cache_t`)
-
-| Field | Type | Purpose |
-| :--- | :--- | :--- |
-| `magic` | `uint32_t` | Validation constant (`0x48314150UL`, `"H1AP"`) verifying initialized RTC memory. |
-| `last_bssid[6]` | `uint8_t[6]` | Cached AP BSSID for single-channel fast Wi-Fi scanning ($\le 300\,\text{ms}$ association). |
-| `last_channel` | `uint8_t` | Cached Wi-Fi primary channel (1–13) to bypass full 13-channel scan on Flow B wakes. |
-| `last_sntp_epoch` | `uint32_t` | Unix timestamp of last successful SNTP sync (re-syncs once every 24 hours). |
-| `active_alarm` | `app_alarm_state_t` | Cached server alarm state (`active`, `severity`, `type`, `message`) for UI display. |
-| `thresholds` | `app_thresholds_t` | Cached server alarm thresholds (in Kelvin and %RH) for local reference. |
-| `consecutive_net_fails` | `uint16_t` | Exponential backoff counter when Wi-Fi or MQTTS broker is unreachable. |
-| `last_err_code` | `int32_t` | Most recent `esp_err_t` or MQTT protocol error displayed on Screen 3 (`screen_system`). |
+| `prov_done` | `u8` | `0` (`false`) | Wi-Fi credentials provisioned flag. |
+| `tb_claimed` | `u8` | `0` (`false`) | ThingsBoard cloud claiming completed flag. |
+| `tb_token` | `str` | `""` | ThingsBoard device access token (up to 63 chars). |
+| `claim_sec` | `str` | `"H1-XXXXXXXX"` | MAC-derived device claiming secret key. |
+| `nick_str` | `str` | `"Main Humidor"` | User-assigned humidor display name (up to 23 chars). |
+| `flow_a_s` | `u32` | `180` (`3 min`) | Headless sensor sample burst interval in seconds. |
+| `flow_b_s` | `u32` | `900` (`15 min`) | Display refresh & cloud sync interval in seconds. |
+| `unit_t` | `u8` | `0` (`°C`) | Temperature unit (`0 = °C`, `1 = °F`, `2 = K`). |
+| `unit_vp` | `u8` | `0` (`hPa`) | Vapor pressure unit (`0 = hPa`, `1 = kPa`). |
+| `ui_theme` | `u8` | `0` (`LIGHT`) | Display polarity (`0 = Black-on-White`, `1 = White-on-Black`). |
+| `snd_en` | `u8` | `1` (`true`) | Master acoustic feedback enable flag. |
+| `vol_pct` | `u8` | `75` (`75%`) | Speaker volume percentage (`0..100%`). |
+| `alrt_mode` | `u8` | `2` (`EITHER_OR`) | Compound alarm trigger mode (`0..3`). |
+| `th_t_hi` | `i32` | `2300` (`23.00°C`) | High temperature limit in centi-degrees Celsius. |
+| `th_t_lo` | `i32` | `1600` (`16.00°C`) | Low temperature limit in centi-degrees Celsius. |
+| `th_rh_hi` | `i32` | `7200` (`72.00%`) | High relative humidity limit in centi-percent. |
+| `th_rh_lo` | `i32` | `6200` (`62.00%`) | Low relative humidity limit in centi-percent. |

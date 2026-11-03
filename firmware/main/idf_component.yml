@@ -1,5 +1,16 @@
+## humid1-os Main Application Component Manifest
+version: "0.2.0-dev"
+description: "Humid1-OS: Smart Humidor & Precision Environmental Appliance Firmware built on H1OS (Layer 4)"
+url: "https://github.com/Humidyne-Labs/humid1-os"
+license: "MIT"
+
 dependencies:
-  idf: ">=5.1"
+  idf: ">=6.1.0"
+
+  # H1OS Operating System & Hardware Middleware (Layers 1-4)
   h1os:
+    version: ">=2.4.9-dev"
     git: "https://github.com/Humidyne-Labs/H1OS.git"
     path: "components/h1os"
+    # For local side-by-side workspace development, uncomment override_path:
+    # override_path: "../../../H1OS/components/h1os"

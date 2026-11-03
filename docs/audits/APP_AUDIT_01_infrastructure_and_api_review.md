@@ -18,7 +18,7 @@ A cross-layer audit comparing `excecutive_summery.txt` against the exported Thin
 | :--- | :--- | :---: | :--- |
 | **`INFRA-01`** | ThingsBoard `Device Setup Chain` & `Alarms` Rule Chain | `S1` | Missing `flow_a_period_sec`, `device_nickname`, `telemetry_schema_mask`, and `alarm_state` Shared Attributes (needed so deep-sleeping devices receive active server alarms and dynamic Flow A/B periods on wake). |
 | **`INFRA-02`** | ThingsBoard `Alarms` Rule Chain (`Master Evaluator` Node 5) | `S1` | Hysteresis (`rhHist`, `tempHist`, `battHist`) is applied only on the `WARNING <-> NORMAL` boundary, not on the `CRITICAL <-> WARNING` boundary, causing rapid alarm severity flapping and notification spam. |
-| **`INFRA-03`** | ThingsBoard `POST FCM Alerts` Rule Chain | `S2` | `Create Alert Payload` contains logic for `metadata.action === "ClearAlarm"`, but the `Alarms` Rule Chain only wires `Created` and `Updated` links (omitting `Cleared`) to `SEND FCM Alarm`. |
+| **`INFRA-03`** | ThingsBoard `POST FCM Alerts` Rule Chain | `S2` | `Create Alert data buffer` contains logic for `metadata.action === "ClearAlarm"`, but the `Alarms` Rule Chain only wires `Created` and `Updated` links (omitting `Cleared`) to `SEND FCM Alarm`. |
 | **`INFRA-04`** | ThingsBoard `Boot RPC Trigger` Rule Chain | `S1` | Node 1 (`prep`) connects to `TbSendRPCRequestNode` (server-to-device request) instead of `TbSendRPCReplyNode` (device-initiated RPC response), and SNTP is still required prior to TLS handshake. |
 | **`INFRA-05`** | Web Dashboard (`ControlPanel.tsx` & `thingsboard.ts`) | `S1` | Three code paths hardcode Fahrenheit-to-Kelvin/Celsius math `(temp - 32) * 5/9` without calling `toKelvinTemp()`, producing $\sim 418\,\text{K}$ ($293^\circ\text{F}$) when the device publishes canonical Kelvin (`294.26 K`). |
 | **`INFRA-06`** | H1OS v2.4.4-dev Middleware (`CMakeLists.txt` & `h1os.h`) | `S0` / `S1` | Missing `.ttf`/`.woff` font files in `firmware/tools/fonts/` breaks CMake build (`MANDATE-01`); missing public `h1os_set_flow_periods()` API prevents runtime Flow A/B updates without including `orch_state.h` (`MANDATE-02`). |
@@ -152,7 +152,7 @@ function evalMetric(val, loCrit, loWarn, hiWarn, hiCrit, hist, name, unit, isTem
 ### 2.3 `INFRA-03`: Wiring `Cleared` Alarms to `POST FCM Alerts`
 
 #### Problem
-In `POST FCM Alerts` (`aa7f9880-b168-11f1-8055-19de3a92853c.json`), Node 0 (`Create Alert Payload`) contains explicit handling for cleared alarms:
+In `POST FCM Alerts` (`aa7f9880-b168-11f1-8055-19de3a92853c.json`), Node 0 (`Create Alert data buffer`) contains explicit handling for cleared alarms:
 
 ```javascript
 if (metadata.action === "ClearAlarm") {

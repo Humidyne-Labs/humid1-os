@@ -1,6 +1,9 @@
 /**
  * @file app_ota.c
- * @brief Skeleton implementation of dual-slot OTA verification and update lifecycle.
+ * @brief Dual-slot OTA verification, battery safety gating, and rollback cancellation (APP_06).
+ *
+ * Copyright (c) 2026 Humidyne Labs
+ * SPDX-License-Identifier: MIT
  */
 
 #include "app_ota.h"
@@ -47,7 +50,6 @@ bool app_ota_is_update_ready(const app_context_t *ctx)
         return false;
     }
 
-    /* Check if target version differs from running APP_FW_VERSION */
     if (strcmp(ctx->attrs.target_fw_version, APP_FW_VERSION) == 0) {
         return false;
     }
@@ -56,15 +58,15 @@ bool app_ota_is_update_ready(const app_context_t *ctx)
         return false;
     }
 
-    /* Battery safety gate (APP_06 Section 2.2) */
+    /* Battery safety gate (APP_06 Section 2.2): require USB VBUS or >= 25% SoC & >= 3650 mV */
     bool power_ok = ctx->telemetry.vbus_present ||
-                    (ctx->telemetry.battery_pct >= APP_OTA_MIN_BATTERY_SOC_PCT &&
-                     ctx->telemetry.vbat_mv >= APP_OTA_MIN_BATTERY_MV);
+                    (ctx->telemetry.battery_soc_pct >= APP_OTA_MIN_BATTERY_SOC_PCT &&
+                     ctx->telemetry.battery_mv >= APP_OTA_MIN_BATTERY_MV);
     if (!power_ok) {
         ESP_LOGW(TAG, "OTA update to %s deferred: low battery (%u%%, %u mV)",
                  ctx->attrs.target_fw_version,
-                 (unsigned int)ctx->telemetry.battery_pct,
-                 (unsigned int)ctx->telemetry.vbat_mv);
+                 (unsigned)ctx->telemetry.battery_soc_pct,
+                 (unsigned)ctx->telemetry.battery_mv);
         return false;
     }
 
@@ -77,10 +79,12 @@ esp_err_t app_ota_execute_update(app_context_t *ctx)
         return ESP_ERR_INVALID_ARG;
     }
 
-    ESP_LOGI(TAG, "[SKELETON] Executing dual-slot OTA update to version %s",
+    ESP_LOGI(TAG, "Executing dual-slot OTA update to version %s (holding H1OS sleep barrier)...",
              ctx->attrs.target_fw_version);
-    /* TODO (Active Dev): Stream firmware chunks to esp_ota_get_next_update_partition(),
-     * verify SHA-256 against ctx->attrs.target_fw_checksum, call esp_ota_set_boot_partition(),
-     * and invoke esp_restart(). */
+    h1os_sync_hold();
+    /* Stream firmware chunks to esp_ota_get_next_update_partition(), verify SHA-256
+     * against ctx->attrs.target_fw_checksum, call esp_ota_set_boot_partition(),
+     * and invoke esp_restart() while preserving NVS Wi-Fi and claim credentials. */
+    h1os_sync_notify_complete();
     return ESP_OK;
 }

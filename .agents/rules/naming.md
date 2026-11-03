@@ -31,7 +31,7 @@ Construct function identifiers using a clear, predictable hierarchy:
 
 ## 2. Bucket is to Array, as Function is to Runtime Operation
 
-- **Data Structures:** Names must reflect their physical memory structure and payload:
+- **Data Structures:** Names must reflect their physical memory structure and data buffer:
   - `ring_buffer` for circular FIFO ring buffers.
   - `sample_table` for sequential lookup arrays.
   - `persisted_state` for RTC Slow Memory retention blocks.
@@ -53,7 +53,7 @@ Literal names must remain concise. Do not write 60-character sentences. Use univ
 | `cb` | Callback function pointer | `listener`, `hooker` |
 | `ms` / `us` / `sec` | Milliseconds / Microseconds / Seconds | `ticks` (unless raw RTOS timer ticks) |
 | `pwr` / `batt` / `vbat` | Power / Battery voltage | `juice`, `fuel`, `life` |
-| `sample` | Physical sensor measurement | `iteration`, `sortie`, `hit`, `sniff` |
+| `sample` | Physical sensor measurement | `iteration`, `sample burst`, `hit`, `sniff` |
 | `err` / `ret` | Error code / Return status | `result_code`, `flag_status` |
 
 ---
