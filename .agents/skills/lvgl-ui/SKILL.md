@@ -42,58 +42,36 @@ Y = 200 px +-------------------------------------------------------+
 
 ---
 
-## 3. Font Metric CSV Tables (`tools/fonts/`)
+## 3. H1OS Font Metric CSV Tables (`metrics/*.csv`)
 
-Montserrat is a **proportional (variable-width)** font with 4-bit fractional advance widths and class-based kerning. Never use multiple spaces for horizontal alignment—use separate column labels or single-space padding.
+IBM Plex Sans is a **proportional (variable-width)** font with 4-bit fractional advance widths (`adv_w_fp4`, exact LVGL v9 step `(adv_w_fp4 + kern_fp4 + 8) >> 4`), while IBM Plex Mono & Terminus provide fixed tabular widths. Never use multiple spaces for proportional horizontal alignment—use separate column labels or tabular mono strikes.
 
-### Character Advance Widths & Bounding Boxes
-- `tools/fonts/char_widths_montserrat_14.csv`
-- `tools/fonts/char_widths_montserrat_16.csv`
-- `tools/fonts/char_widths_montserrat_18.csv`
-- `tools/fonts/char_widths_montserrat_20.csv`
-- `tools/fonts/char_widths_montserrat_24.csv`
-- `tools/fonts/char_widths_montserrat_32.csv`
-
-### Class Kerning Pair Adjustments (3,400+ pairs per font)
-- `tools/fonts/kern_pairs_montserrat_14.csv`
-- `tools/fonts/kern_pairs_montserrat_16.csv`
-- `tools/fonts/kern_pairs_montserrat_18.csv`
-- `tools/fonts/kern_pairs_montserrat_20.csv`
-- `tools/fonts/kern_pairs_montserrat_24.csv`
-- `tools/fonts/kern_pairs_montserrat_32.csv`
+Per-strike manifests (`char_widths_<symbol>.csv`, `kern_pairs_<symbol>.csv`) and `humid1_epd_vault.json.gz` are supplied by the H1OS dependency (`tools/fonts/metrics/`) or `epd-font` (`dist/h1os_distro/metrics/`).
 
 ---
 
-## 4. Layout Verification & Tool Execution
+## 4. Layout Verification (`embedded-ops` MCP & `epd-typography` Skill)
 
-### A. Check Single String Width (CLI)
-Calculates exact sub-pixel string width $\sum(\text{adv\_w} + \text{kern})$ with per-character breakdown:
-```powershell
-# Evaluate string against 188px limit in Montserrat-14 (default):
-python3 firmware/tools/agent/check_string_width.py "Power: CHARGED 4.00V"
-
-# Evaluate in a different font size (e.g. 20pt hero text):
-python3 firmware/tools/agent/check_string_width.py --size 20 "72.5% RH"
+### A. Single String / Two-Column Budget (`embedded-ops/epd_string_budget`)
+```text
+embedded-ops/epd_string_budget(
+  strike="humid1_font_plex_sans_normal_14",
+  text="Power: CHARGED 4.00V",
+  workspace_dir="C:/Users/Matt/Documents/GitHub/humid1-os"
+)
 ```
 
-### B. Automated Screen File Audit (`--audit-screens`)
-Scans all C screen files in `firmware/main/screens/`, extracts string formatting templates, simulates worst-case parameter expansion, and asserts that no string exceeds $188.0\text{ px}$:
-```powershell
-python3 firmware/tools/agent/check_string_width.py --audit-screens
+### B. Automated Screen File Audit (`embedded-ops/epd_audit_screens`)
+Scans `firmware/main/screens/*.c`, resolves widget fonts and worst-case `printf` expansions, and asserts `<= 188 px`:
+```text
+embedded-ops/epd_audit_screens(workspace_dir="C:/Users/Matt/Documents/GitHub/humid1-os")
 ```
 
-### C. Re-Extract Font Metrics & Kerning CSVs
-Re-generates all 12 CSV tables from generated LVGL 1bpp C font files:
-```powershell
-python3 firmware/tools/agent/extract_font_metrics.py
-```
+### C. Regenerate Font Assets (`epd-font` v1.0.23)
+Font regeneration and CSV extraction happen solely upstream in `epd-font` (`scripts\h1os-build-distro\02_build_fonts.bat` + `07_package_distro.bat`), then sync into `H1OS/components/h1os/tools/fonts/`.
 
 ### D. Query Metrics via DuckDB SQL
 Query glyph or kerning metrics using DuckDB MCP:
 ```sql
--- Widest ASCII characters in Montserrat-14:
-SELECT char, width_px FROM 'tools/fonts/char_widths_montserrat_14.csv' WHERE unicode_dec < 128 ORDER BY width_px DESC LIMIT 8;
-
--- Negative kerning adjustments (tighter pairs):
-SELECT left_char, right_char, kern_px FROM 'tools/fonts/kern_pairs_montserrat_14.csv' WHERE kern_px < 0 ORDER BY kern_px ASC LIMIT 10;
+SELECT char, width_px FROM read_csv_auto('firmware/managed_components/humid1__h1os/tools/fonts/metrics/char_widths_humid1_font_plex_sans_normal_14.csv') WHERE unicode_dec < 128 ORDER BY width_px DESC LIMIT 8;
 ```
